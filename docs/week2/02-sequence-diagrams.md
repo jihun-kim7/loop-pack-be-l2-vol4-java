@@ -73,7 +73,9 @@ sequenceDiagram
     participant UserService
     participant OrderService
     participant Product
+    participant Stock
     participant ProductRepository
+    participant StockRepository
     participant OrderRepository
 
     Client->>OrderController: POST /api/v1/orders
@@ -102,16 +104,19 @@ sequenceDiagram
         end
         ProductRepository-->>OrderService: Product
 
-        OrderService->>Product: deductStock(quantity)
+        OrderService->>StockRepository: findByProductId(productId)
+        StockRepository-->>OrderService: Stock
+
+        OrderService->>Stock: deduct(quantity)
         alt 재고 부족
-            Product-->>OrderService: throw BAD_REQUEST
+            Stock-->>OrderService: throw BAD_REQUEST
             OrderService-->>OrderFacade: throw BAD_REQUEST
             Note over OrderService: 트랜잭션 롤백
             OrderFacade-->>OrderController: throw BAD_REQUEST
             OrderController-->>Client: 400 Bad Request
         end
 
-        OrderService->>ProductRepository: save(product)
+        OrderService->>StockRepository: save(stock)
         Note over OrderService: OrderItem 생성 (상품명, 가격 스냅샷)
     end
 
@@ -125,7 +130,7 @@ sequenceDiagram
 
 **읽는 포인트**
 - `@Transactional`이 루프 전체를 감싸므로 중간 실패 시 이미 차감된 재고도 전부 롤백된다.
-- 재고 차감 책임은 `OrderService`가 아닌 `Product.deductStock()`에 있다.
+- 재고 차감 책임은 `OrderService`가 아닌 `Stock.deduct()`에 있다. `Stock`은 `Product`와 분리된 엔티티로, 재고 관련 락 경쟁이 `stocks` row에만 집중된다.
 - `OrderItem` 생성 시점에 상품명과 가격을 직접 복사해두므로, 이후 상품 정보가 바뀌어도 주문 내역은 영향받지 않는다.
 - loginId → userId 변환은 트랜잭션 바깥인 Facade에서 처리한다. OrderService는 순수하게 userId(Long)만 받는다.
 
