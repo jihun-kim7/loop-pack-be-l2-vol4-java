@@ -30,6 +30,7 @@ erDiagram
         bigint id PK
         bigint brand_id FK
         varchar name
+        varchar description
         bigint price
         varchar status "ON_SALE|SOLD_OUT|HIDDEN|DELETED"
         datetime created_at
@@ -47,8 +48,8 @@ erDiagram
 
     likes {
         bigint id PK
-        bigint user_id FK
-        bigint product_id FK
+        bigint user_id
+        bigint product_id
         datetime created_at
     }
 

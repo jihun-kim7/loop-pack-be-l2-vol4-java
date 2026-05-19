@@ -26,6 +26,7 @@ classDiagram
         Long id
         Long brandId
         String name
+        String description
         Long price
         ProductStatus status
         ZonedDateTime deletedAt
@@ -111,7 +112,7 @@ classDiagram
 - `Stock.version`은 낙관적 락(optimistic lock)용 컬럼이다. 동시 주문 충돌 감지에 사용된다.
 - `Stock.deduct()`이 재고 부족 예외를 던지는 책임을 가진다. Service가 직접 수량을 비교하지 않는다.
 - `Like`는 `userId`, `productId`를 FK 없이 Long 값으로만 보유한다. User/Product 삭제 시 Like가 직접 영향받지 않도록 느슨하게 참조.
-- `Brand.delete()`, `Product.delete()`는 `deletedAt`을 채우는 메서드로, BaseEntity에서 상속된다.
+- `Brand.delete()`는 `deletedAt`을 채우는 메서드로 BaseEntity에서 상속된다. `Product.delete()`는 이를 오버라이드하여 `deletedAt` 채움과 함께 `status = DELETED`로 변경한다.
 - `OrderItem`은 `Order` 없이 존재할 수 없는 구조(Aggregate Root 패턴). `productName`, `productPrice`는 주문 시점 스냅샷이라 이후 상품 변경에 영향받지 않는다.
 - 가격 관련 필드(`totalPrice`, `productPrice`)는 `Long`으로 선언한다. `int` 범위(약 21억)를 초과하는 상품이 존재할 수 있기 때문이다.
 
