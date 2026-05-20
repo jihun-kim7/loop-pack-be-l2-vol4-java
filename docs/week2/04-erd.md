@@ -117,7 +117,7 @@ erDiagram
 
 ### stocks
 - `product_id`: UK 제약으로 products와 1:1 관계를 보장한다.
-- `quantity`: 주문 시 차감되는 재고 수량. 어드민에게만 수량 노출, 사용자에게는 `quantity > 0` 여부만 노출.
+- `quantity`: 주문 시 차감되는 재고 수량. 사용자에게는 10개 이하일 때만 수량 노출 ("3개 남음"), 10개 초과 시 재고 유무(`inStock`)만 노출.
 - `version`: 낙관적 락용 컬럼. JPA `@Version`과 연동하여 동시 주문 시 충돌을 감지한다.
 
 ### likes

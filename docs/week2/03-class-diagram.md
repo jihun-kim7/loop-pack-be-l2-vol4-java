@@ -50,6 +50,7 @@ classDiagram
         deduct(quantity)
         hasEnough(quantity) boolean
         isAvailable() boolean
+        getDisplayQuantity() Integer
     }
 
     class Like {
@@ -218,7 +219,7 @@ classDiagram
 ```
 
 **읽는 포인트**
-- `UserService`는 `loginId → User(userId)` 변환 역할만 한다. Facade에서 호출되어 다른 도메인 Service에 `userId(Long)`를 넘겨준다.
+- `UserService`는 `AuthUserArgumentResolver`에서 `authenticate(loginId, loginPw)` 호출 시 사용된다. 인증과 동시에 `userId`를 `AuthUserContext`에 담아 반환하므로, Facade에서 별도로 `UserService.getUser()`를 호출하지 않는다.
 - `BrandService`가 `ProductRepository`에 의존하는 이유: 브랜드 삭제 시 연관 상품도 soft delete 처리해야 하기 때문이다.
 - `LikeService`가 `ProductRepository`에 의존하는 이유: 좋아요 등록 전 상품 존재 여부 확인이 필요하기 때문이다.
 - `OrderService`와 `AdminOrderService`를 분리했다. 고객 주문 흐름(생성/조회)과 어드민 전체 조회는 접근 주체와 책임이 다르기 때문이다.
