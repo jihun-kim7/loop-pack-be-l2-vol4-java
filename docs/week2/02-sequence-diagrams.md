@@ -115,9 +115,9 @@ sequenceDiagram
     AuthUserArgumentResolver->>AuthUserArgumentResolver: authenticate(loginId, loginPw)
     AuthUserArgumentResolver-->>UserController: AuthUserContext(loginId, userId)
 
-    UserController->>UserFacade: getMe(loginId)
-    UserFacade->>UserService: getByLoginId(loginId)
-    UserService->>UserRepository: findByLoginId(loginId)
+    UserController->>UserFacade: getMe(userId)
+    UserFacade->>UserService: getUserById(userId)
+    UserService->>UserRepository: findById(userId)
     UserRepository-->>UserService: User
     UserService-->>UserFacade: User
     Note over UserFacade: UserInfo 조립 (getMaskedName 호출)
@@ -129,6 +129,7 @@ sequenceDiagram
 - `password`는 응답 DTO 어디에도 노출되지 않는다.
 - `name`은 도메인 메서드 `User.getMaskedName()`을 통해 마스킹된 값을 반환한다. Facade/Controller가 직접 자르지 않는다.
 - 인증 단계에서 이미 사용자 존재가 확인되므로 별도 404 분기는 없다.
+- 인증 시 이미 획득한 `userId`를 그대로 사용해 PK로 조회한다. `loginId`로 다시 조회하지 않아 DB 라운드트립이 줄어든다.
 
 ---
 
@@ -173,10 +174,10 @@ sequenceDiagram
     UserController->>AuthUserArgumentResolver: @AuthUser 파라미터 resolve
     AuthUserArgumentResolver-->>UserController: AuthUserContext(loginId, userId)
 
-    UserController->>UserFacade: changePassword(loginId, current, new)
-    UserFacade->>UserService: changePassword(loginId, current, new)
+    UserController->>UserFacade: changePassword(userId, current, new)
+    UserFacade->>UserService: changePassword(userId, current, new)
 
-    UserService->>UserRepository: findByLoginId(loginId)
+    UserService->>UserRepository: findById(userId)
     UserRepository-->>UserService: User
 
     UserService->>PasswordEncoder: matches(current, user.password)
@@ -200,6 +201,7 @@ sequenceDiagram
 - 현재 비밀번호 검증과 새 비밀번호 저장이 하나의 트랜잭션 안에서 처리된다.
 - `User.updatePassword()`는 도메인 메서드. 인코딩 결과만 받아 저장하고, 인코딩 자체는 `PasswordEncoder`가 담당한다.
 - 인증 실패(잘못된 로그인 정보)와 현재 비밀번호 불일치(올바른 로그인이지만 잘못된 currentPassword)는 다른 케이스다.
+- 인증 단계에서 획득한 `userId`로 PK 조회한다.
 
 ---
 

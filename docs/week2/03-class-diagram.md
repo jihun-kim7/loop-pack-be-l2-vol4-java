@@ -53,6 +53,7 @@ classDiagram
         long version
         deduct(quantity)
         restore(quantity)
+        changeQuantity(newQuantity)
         hasEnough(quantity) boolean
         isAvailable() boolean
         getDisplayQuantity() Integer
@@ -204,9 +205,10 @@ classDiagram
 classDiagram
     class UserService {
         +register(command) User
-        +getByLoginId(loginId) User
-        +changePassword(loginId, current, new)
-        +authenticate(loginId, password) AuthUserContext
+        +getUser(loginId) User
+        +getUserById(userId) User
+        +changePassword(userId, current, new)
+        +authenticate(loginId, password) User
     }
 
     class BrandService {
@@ -231,6 +233,7 @@ classDiagram
         +getStocksByProductIds(productIds) List~Stock~
         +deduct(productId, quantity)
         +restore(productId, quantity)
+        +changeQuantity(productId, newQuantity)
     }
 
     class LikeService {
@@ -246,7 +249,7 @@ classDiagram
     }
 
     class PaymentService {
-        +process(order) PaymentResult
+        +process(orderId, amount) PaymentResult
     }
 
     class AdminOrderService {
@@ -257,6 +260,8 @@ classDiagram
     class UserRepository {
         <<interface>>
         +findByLoginId(loginId) Optional~User~
+        +findById(userId) Optional~User~
+        +existsByLoginId(loginId) boolean
         +save(user) User
     }
 
@@ -322,7 +327,8 @@ classDiagram
 ```
 
 **읽는 포인트**
-- `UserService.authenticate`는 `AuthUserArgumentResolver`에서 호출되어 인증과 동시에 `userId`를 `AuthUserContext`에 담아 반환한다. 그래서 다른 Facade에서 별도로 `UserService.getUser()`를 호출하지 않는다.
+- `UserService.authenticate`는 `UserModel`을 반환하고, 이를 `UserFacade.authenticate`가 `AuthUserContext(loginId, userId)`로 변환해 `AuthUserArgumentResolver`에 돌려준다. 인증 한 번으로 `userId`까지 확보되므로 다른 Facade(Order/Like 등)에서는 `UserService.getUser()`를 다시 호출하지 않는다.
+- `UserService.getUser(loginId)`는 회원 본인 조회용(인증 시), `getUserById(userId)`는 인증 이후 다른 흐름에서 PK 기준 조회용으로 사용한다.
 - `UserService`가 `PasswordEncoder`에 의존하는 이유: 회원가입 시 비밀번호 인코딩, 비밀번호 변경 시 현재 비밀번호 검증 및 새 비밀번호 인코딩.
 - `BrandService`가 `ProductRepository`에 의존하는 이유: 브랜드 삭제 시 연관 상품도 soft delete 처리해야 하기 때문이다.
 - `LikeService`가 `ProductRepository`에 의존하는 이유: 좋아요 등록 전 상품 존재 여부 확인이 필요하기 때문이다. 멱등 보장은 `LikeService` 내부에서 `existsByUserIdAndProductId` 사전 체크 + UK 위반 예외 캐치로 이중 방어한다.

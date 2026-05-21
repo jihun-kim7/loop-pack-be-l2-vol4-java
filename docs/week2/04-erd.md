@@ -28,7 +28,7 @@ erDiagram
 
     products {
         bigint id PK
-        bigint brand_id FK
+        bigint brand_id "ID 참조 (FK 없음)"
         varchar name
         varchar description
         bigint price
@@ -40,23 +40,22 @@ erDiagram
 
     stocks {
         bigint id PK
-        bigint product_id "UK, FK"
+        bigint product_id "UK, ID 참조 (FK 없음)"
         int quantity
         bigint version
-        datetime created_at
         datetime updated_at
     }
 
     likes {
         bigint id PK
-        bigint user_id "UK with product_id"
-        bigint product_id "UK with user_id"
+        bigint user_id "UK with product_id, ID 참조 (FK 없음)"
+        bigint product_id "UK with user_id, ID 참조 (FK 없음)"
         datetime created_at
     }
 
     orders {
         bigint id PK
-        bigint user_id FK
+        bigint user_id "ID 참조 (FK 없음)"
         varchar status "PENDING|COMPLETED|CANCELLED"
         bigint total_price
         datetime ordered_at
@@ -66,8 +65,8 @@ erDiagram
 
     order_items {
         bigint id PK
-        bigint order_id FK
-        bigint product_id "FK 없음, 참조용"
+        bigint order_id FK "Order 애그리거트 내부 - 객체 참조 (FK 있음)"
+        bigint product_id "ID 참조 (FK 없음, 참조용)"
         varchar product_name "스냅샷"
         bigint product_price "스냅샷"
         int quantity
@@ -75,7 +74,7 @@ erDiagram
 
     payments {
         bigint id PK
-        bigint order_id "UK, FK"
+        bigint order_id "UK, ID 참조 (FK 없음)"
         varchar pg_transaction_id "nullable, 성공 시 PG가 발급한 거래번호"
         varchar status "REQUESTED|SUCCESS|FAILED"
         bigint amount
@@ -96,13 +95,14 @@ erDiagram
 ```
 
 **읽는 포인트**
+- **FK 제약은 같은 애그리거트 내부에서만 사용한다.** `order_items.order_id`만 FK가 걸려 있고(OrderItem이 Order 애그리거트의 일부, JPA `@ManyToOne` cascade), 나머지(`products.brand_id`, `stocks.product_id`, `orders.user_id`, `likes.user_id/product_id`, `order_items.product_id`, `payments.order_id`)는 모두 **Long ID 참조**다. 락 경쟁 회피, 추후 샤딩 대비, 마이그레이션 유연성을 위해 DB 레벨 FK 대신 애플리케이션 레벨에서 정합성을 보장한다.
 - `stocks`는 `products`와 1:1로 분리된 테이블이다. 주문마다 갱신되는 `quantity`를 `products`에서 분리해 락 경쟁 범위를 최소화한다. `products` row는 캐싱 가능한 상태를 유지한다.
 - `stocks.version`은 낙관적 락(`@Version`)용 컬럼이다. 동시 주문이 같은 재고를 차감할 때 충돌을 감지한다.
-- `stocks.product_id`는 UK 제약으로 1:1 관계를 DB 레벨에서 보장한다.
+- `stocks.product_id`는 UK 제약으로 1:1 관계를 DB 레벨에서 보장한다 (FK는 없음).
 - `brands`, `products` 모두 `deleted_at` 컬럼 보유. 브랜드 삭제 시 연관 상품의 `deleted_at`도 함께 채운다. 조회 시 `deleted_at IS NULL` 조건 필수.
-- `order_items.product_id`는 FK 제약 없음. 상품이 삭제되어도 주문 내역은 `product_name`, `product_price` 스냅샷으로 독립 보존된다.
+- `order_items.product_id`는 ID 참조. 상품이 삭제되어도 주문 내역은 `product_name`, `product_price` 스냅샷으로 독립 보존된다.
 - `likes`는 `(user_id, product_id)` 복합 UK 제약으로 DB 레벨에서 중복 좋아요 방지. 좋아요 등록 시 애플리케이션 사전 체크 + DB UK가 이중 방어선이며, UK 위반 예외는 멱등 응답으로 변환한다.
-- `payments`는 `order_id`에 UK 제약을 두어 1주문 1결제 관계를 보장한다. 결제 시도/결과를 모두 기록하여 PG 대조와 감사 추적에 사용한다.
+- `payments`는 `order_id`에 UK 제약을 두어 1주문 1결제 관계를 보장한다 (FK는 없음). 결제 시도/결과를 모두 기록하여 PG 대조와 감사 추적에 사용한다.
 - 가격 관련 컬럼(`price`, `total_price`, `product_price`, `amount`)은 `bigint`로 선언한다. `int` 범위(약 21억)를 초과하는 경우를 대비한다.
 
 ---
@@ -183,9 +183,31 @@ erDiagram
 - 현재: `likes` 테이블 COUNT JOIN으로 집계 → 항상 정확하지만 상품 수가 많아지면 느려질 수 있음.
 - 추후: `products.like_count` 캐시 컬럼 도입 → 빠르지만 좋아요 등록/취소 시 동기화 필요, 동시성 문제 고려 필요.
 
-### `order_items.product_id` FK 제약
-- FK 제약을 걸면 상품 물리 삭제 시 주문 내역도 영향받음.
-- soft delete 방식을 쓰더라도 FK 제약 없이 참조용으로만 두는 것이 안전.
+### FK 제약 정책 (애그리거트 내부에만 FK)
+
+대규모 트래픽 서비스에서는 보통 다음 이유로 DB FK 제약을 제거한다.
+
+- INSERT/UPDATE 시 부모 row의 존재 확인을 위한 lock 발생 → 동시성 저하.
+- 마이그레이션·배치 작업 시 제약을 풀고 다시 거는 부담.
+- 추후 샤딩 도입 시 다른 샤드의 row를 참조하는 FK는 불가능.
+
+대신 정합성은 **애플리케이션 레벨**에서 보장한다 (예: 상품 등록 시 `brandService.getBrand()`로 존재 확인 → 없으면 404).
+
+본 설계에서는 **같은 애그리거트 내부에만 FK를 사용**한다.
+
+| 관계 | FK 여부 | 이유 |
+|---|---|---|
+| `order_items.order_id` → `orders.id` | ✅ 있음 | OrderItem은 Order 애그리거트 내부. JPA `@ManyToOne` + cascade로 묶임 |
+| `products.brand_id` → `brands.id` | ❌ 없음 | 다른 애그리거트. Long ID로 참조 |
+| `stocks.product_id` → `products.id` | ❌ 없음 | 다른 애그리거트. UK 제약은 1:1 보장용 |
+| `orders.user_id` → `users.id` | ❌ 없음 | 다른 애그리거트 |
+| `likes.user_id`, `likes.product_id` | ❌ 없음 | 다른 애그리거트. UK는 중복 좋아요 방지용 |
+| `order_items.product_id` | ❌ 없음 | 다른 애그리거트. 스냅샷 보존으로 독립 |
+| `payments.order_id` | ❌ 없음 | 다른 애그리거트. UK는 1주문 1결제 보장용 |
+
+### `order_items.product_id`를 FK로 걸지 않은 이유
+- FK를 걸면 상품 hard delete 시 주문 내역도 영향받음.
+- soft delete를 쓰더라도, FK 없이 참조용 Long ID만 두면 상품 데이터와 무관하게 주문 내역이 독립 보존된다. 스냅샷 컬럼(`product_name`, `product_price`)이 표시용 데이터의 무결성을 책임진다.
 
 ### 결제 정보를 별도 테이블로 분리한 이유
 - 대안 A: `orders` 테이블에 `pg_transaction_id`, `paid_at`, `failure_reason` 컬럼 추가.
