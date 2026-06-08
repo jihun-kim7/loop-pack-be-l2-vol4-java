@@ -2,7 +2,6 @@ package com.loopers.application.brand;
 
 import com.loopers.domain.brand.BrandModel;
 import com.loopers.domain.brand.BrandRepository;
-import com.loopers.domain.product.ProductModel;
 import com.loopers.domain.product.ProductRepository;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
@@ -60,7 +59,7 @@ public class BrandFacade {
      * 브랜드 삭제 시 연관 상품도 cascade soft delete.
      *
      * <p>같은 트랜잭션에서 처리되어 중간 실패 시 전체 롤백.
-     * Brand-Product 협력 흐름이지만 단순 cascade라 Domain Service 없이 Facade 가 조율한다.
+     * 연관 상품은 단일 UPDATE 쿼리로 일괄 처리하여 N+1을 제거한다.
      */
     @Transactional
     public void deleteBrand(Long brandId) {
@@ -68,11 +67,7 @@ public class BrandFacade {
             .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND,
                 "[id = " + brandId + "] 브랜드를 찾을 수 없습니다."));
 
-        List<ProductModel> products = productRepository.findAllByBrandId(brandId);
-        for (ProductModel product : products) {
-            product.delete();
-            productRepository.save(product);
-        }
+        productRepository.softDeleteAllByBrandId(brandId);  // 단일 UPDATE 쿼리
 
         brand.delete();
         brandRepository.save(brand);
