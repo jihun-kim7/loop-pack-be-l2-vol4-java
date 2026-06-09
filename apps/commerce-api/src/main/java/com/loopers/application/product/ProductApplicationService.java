@@ -1,6 +1,6 @@
 package com.loopers.application.product;
 
-import com.loopers.application.like.LikeFacade;
+import com.loopers.application.like.LikeApplicationService;
 import com.loopers.domain.brand.BrandModel;
 import com.loopers.domain.brand.BrandRepository;
 import com.loopers.domain.product.ProductDetailService;
@@ -12,29 +12,29 @@ import com.loopers.domain.stock.StockRepository;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Set;
 
 /**
- * 상품 유스케이스 Facade.
+ * 상품 유스케이스 Application Service.
  *
  * <p>스타일 2: Application Layer 가 Repository 를 직접 보유하여 조회/저장을 책임진다.
  * Product 도메인 자체는 CRUD 위주라 별도 Domain Service 가 없고,
  * Product+Brand 조합만 {@link ProductDetailService}(순수 Domain Service)에 위임한다.
  */
 @RequiredArgsConstructor
-@Component
-public class ProductFacade {
+@Service
+public class ProductApplicationService {
 
     private static final Set<String> VALID_SORT_VALUES = Set.of("latest", "price_asc", "likes_desc");
 
     private final ProductRepository productRepository;
     private final BrandRepository brandRepository;
     private final StockRepository stockRepository;
-    private final LikeFacade likeFacade;
+    private final LikeApplicationService likeApplicationService;
     private final ProductDetailService productDetailService;
 
     /** 사용자 - 상품 상세 (Product + Brand + Stock + LikeCount 어셈블) */
@@ -44,7 +44,7 @@ public class ProductFacade {
         BrandModel brand = findBrandOrThrow(product.getBrandId());
         ProductWithBrand pwb = productDetailService.assemble(product, brand);
         StockModel stock = findStockOrThrow(productId);
-        long likeCount = likeFacade.countByProductId(productId);
+        long likeCount = likeApplicationService.countByProductId(productId);
         return ProductInfo.forUser(pwb, stock, likeCount);
     }
 
@@ -65,7 +65,7 @@ public class ProductFacade {
         return ProductInfo.assembleUserList(
             products,
             stockRepository.findAllByProductIdIn(productIds),
-            likeFacade.countByProductIdIn(productIds)
+            likeApplicationService.countByProductIdIn(productIds)
         );
     }
 

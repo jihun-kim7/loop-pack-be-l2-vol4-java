@@ -1,6 +1,6 @@
 package com.loopers.interfaces.api.product;
 
-import com.loopers.application.product.ProductFacade;
+import com.loopers.application.product.ProductApplicationService;
 import com.loopers.application.product.ProductInfo;
 import com.loopers.interfaces.api.ApiResponse;
 import jakarta.validation.Valid;
@@ -15,7 +15,7 @@ import java.util.List;
 @RequestMapping("/api-admin/v1/products")
 public class ProductAdminV1Controller {
 
-    private final ProductFacade productFacade;
+    private final ProductApplicationService productApplicationService;
 
     @GetMapping
     public ApiResponse<List<ProductAdminV1Dto.ProductResponse>> getProducts(
@@ -25,7 +25,7 @@ public class ProductAdminV1Controller {
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "20") int size
     ) {
-        List<ProductInfo> infos = productFacade.getProductsForAdmin(brandId, sort, page, size);
+        List<ProductInfo> infos = productApplicationService.getProductsForAdmin(brandId, sort, page, size);
         List<ProductAdminV1Dto.ProductResponse> responses = infos.stream()
             .map(ProductAdminV1Dto.ProductResponse::from)
             .toList();
@@ -37,7 +37,7 @@ public class ProductAdminV1Controller {
         @RequestHeader("X-Loopers-Ldap") String ldap,
         @PathVariable Long productId
     ) {
-        ProductInfo info = productFacade.getProductForAdmin(productId);
+        ProductInfo info = productApplicationService.getProductForAdmin(productId);
         return ApiResponse.success(ProductAdminV1Dto.ProductResponse.from(info));
     }
 
@@ -47,7 +47,7 @@ public class ProductAdminV1Controller {
         @RequestHeader("X-Loopers-Ldap") String ldap,
         @Valid @RequestBody ProductAdminV1Dto.CreateProductRequest request
     ) {
-        ProductInfo info = productFacade.createProduct(
+        ProductInfo info = productApplicationService.createProduct(
             request.brandId(),
             request.name(),
             request.description(),
@@ -63,7 +63,7 @@ public class ProductAdminV1Controller {
         @PathVariable Long productId,
         @Valid @RequestBody ProductAdminV1Dto.UpdateProductRequest request
     ) {
-        ProductInfo info = productFacade.updateProduct(
+        ProductInfo info = productApplicationService.updateProduct(
             productId,
             request.name(),
             request.description(),
@@ -78,7 +78,7 @@ public class ProductAdminV1Controller {
         @RequestHeader("X-Loopers-Ldap") String ldap,
         @PathVariable Long productId
     ) {
-        productFacade.deleteProduct(productId);
+        productApplicationService.deleteProduct(productId);
         return ApiResponse.success(null);
     }
 }

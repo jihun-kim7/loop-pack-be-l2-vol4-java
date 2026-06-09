@@ -127,7 +127,5 @@ public class UserCouponModel extends BaseEntity {
         return usedAt;
     }
 
-    public Long getVersion() {
-        return version;
-    }
+
 }

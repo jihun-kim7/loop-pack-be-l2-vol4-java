@@ -26,26 +26,26 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * LikeFacade 단위 테스트.
+ * LikeApplicationService 단위 테스트.
  *
- * <p>스타일 2 전환에 따라 LikeService 가 흡수되어 Facade 가 유스케이스 흐름·조회·저장·멱등 처리를
+ * <p>스타일 2 전환에 따라 LikeService 가 흡수되어 ApplicationService 가 유스케이스 흐름·조회·저장·멱등 처리를
  * 모두 책임지게 되었다. 좋아요 등록/취소의 멱등성과 협력 흐름을 검증한다.
  *
  * <p>Mockito 로 Repository 와 StockRepository 를 대체하여 Spring 컨텍스트 없이 단위 테스트로 구성한다.
  */
-class LikeFacadeTest {
+class LikeApplicationServiceTest {
 
     private LikeRepository likeRepository;
     private ProductRepository productRepository;
     private StockRepository stockRepository;
-    private LikeFacade sut;
+    private LikeApplicationService sut;
 
     @BeforeEach
     void setUp() {
         likeRepository = mock(LikeRepository.class);
         productRepository = mock(ProductRepository.class);
         stockRepository = mock(StockRepository.class);
-        sut = new LikeFacade(likeRepository, productRepository, stockRepository);
+        sut = new LikeApplicationService(likeRepository, productRepository, stockRepository);
     }
 
     @DisplayName("좋아요를 등록할 때,")

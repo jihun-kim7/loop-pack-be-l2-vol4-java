@@ -79,7 +79,7 @@ public class CouponModel extends BaseEntity {
      * 이 쿠폰이 주어진 주문 금액·시점에 적용 가능한지 검증한다.
      *
      * <p>만료 여부와 최소 주문 금액 조건을 한 곳에서 명시적으로 확인한다.
-     * Facade 에서 {@link #calculateDiscount} 호출 전에 반드시 먼저 호출해야 한다.
+     * ApplicationService 에서 {@link #calculateDiscount} 호출 전에 반드시 먼저 호출해야 한다.
      */
     public void validateApplicable(Money orderAmount, ZonedDateTime now) {
         if (isExpired(now)) {

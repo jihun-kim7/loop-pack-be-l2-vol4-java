@@ -5,11 +5,11 @@ import com.loopers.domain.user.UserRegisterCommand;
 import com.loopers.domain.user.UserService;
 import com.loopers.interfaces.api.user.AuthUserContext;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 @RequiredArgsConstructor
-@Component
-public class UserFacade {
+@Service
+public class UserApplicationService {
 
     private final UserService userService;
 
@@ -29,7 +29,7 @@ public class UserFacade {
 
     /**
      * 인증과 동시에 userId까지 담아 AuthUserContext를 반환한다.
-     * Facade/Service에서 별도로 UserService.getUser()를 재호출할 필요가 없다.
+     * ApplicationService에서 별도로 UserService.getUser()를 재호출할 필요가 없다.
      */
     public AuthUserContext authenticate(String loginId, String rawPassword) {
         UserModel user = userService.authenticate(loginId, rawPassword);

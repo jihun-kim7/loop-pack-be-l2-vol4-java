@@ -24,6 +24,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -135,7 +136,7 @@ public class OrderApplicationService {
      * <p>조회/소유자 검증은 호출 전 완료된 상태. 여기서는 상태 변경(use)과 낙관적 락 flush만 수행한다.
      */
     private void useCoupon(OrderModel order, UserCouponModel userCoupon, CouponModel template) {
-        ZonedDateTime now = ZonedDateTime.now();
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
         template.validateApplicable(Money.of(order.getOriginalAmount()), now);   // 만료 + 최소주문금액
         Money discount = template.calculateDiscount(Money.of(order.getOriginalAmount()));
         userCoupon.use(now);   // AVAILABLE → USED (중복 사용 방어)

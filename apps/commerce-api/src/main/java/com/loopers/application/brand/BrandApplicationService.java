@@ -6,20 +6,20 @@ import com.loopers.domain.product.ProductRepository;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 /**
- * 브랜드 유스케이스 Facade.
+ * 브랜드 유스케이스 Application Service.
  *
  * <p>스타일 2: Application Layer 가 조회/저장/협력을 모두 책임진다.
- * Brand 도메인은 CRUD 위주라 별도 Domain Service 없이 Facade 가 직접 처리한다.
+ * Brand 도메인은 CRUD 위주라 별도 Domain Service 없이 ApplicationService 가 직접 처리한다.
  */
 @RequiredArgsConstructor
-@Component
-public class BrandFacade {
+@Service
+public class BrandApplicationService {
 
     private final BrandRepository brandRepository;
     private final ProductRepository productRepository;

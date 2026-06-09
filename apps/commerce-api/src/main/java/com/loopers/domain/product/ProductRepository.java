@@ -12,7 +12,7 @@ public interface ProductRepository {
 
     /**
      * 브랜드에 속한 모든 상품을 단일 UPDATE 쿼리로 soft delete 처리한다.
-     * BrandFacade.deleteBrand() 에서 N+1 없이 연관 상품을 일괄 삭제하기 위해 사용한다.
+     * BrandApplicationService.deleteBrand() 에서 N+1 없이 연관 상품을 일괄 삭제하기 위해 사용한다.
      */
     void softDeleteAllByBrandId(Long brandId);
 }

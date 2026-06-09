@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -85,7 +86,7 @@ class OrderConcurrencyIntegrationTest {
                 }
             });
         }
-        latch.await();
+        latch.await(30, TimeUnit.SECONDS);
         executor.shutdown();
 
         // assert — 전부 성공, 재고 정확히 0 (Lost Update 없음)
@@ -122,7 +123,7 @@ class OrderConcurrencyIntegrationTest {
                 }
             });
         }
-        latch.await();
+        latch.await(30, TimeUnit.SECONDS);
         executor.shutdown();
 
         // assert — 정확히 재고 수만큼 성공, 재고는 0, 음수 없음
@@ -162,7 +163,7 @@ class OrderConcurrencyIntegrationTest {
                 }
             });
         }
-        latch.await();
+        latch.await(30, TimeUnit.SECONDS);
         executor.shutdown();
 
         // assert — 쿠폰 사용은 단 1건만 성공, 쿠폰 상태는 USED

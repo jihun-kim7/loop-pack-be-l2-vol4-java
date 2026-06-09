@@ -1,6 +1,6 @@
 package com.loopers.interfaces.api.like;
 
-import com.loopers.application.like.LikeFacade;
+import com.loopers.application.like.LikeApplicationService;
 import com.loopers.application.product.ProductInfo;
 import com.loopers.interfaces.api.ApiResponse;
 import com.loopers.interfaces.api.product.ProductV1Dto;
@@ -15,7 +15,7 @@ import java.util.List;
 @RestController
 public class LikeV1Controller {
 
-    private final LikeFacade likeFacade;
+    private final LikeApplicationService likeApplicationService;
 
     /**
      * 좋아요 등록 - 멱등 동작 (P-1).
@@ -26,7 +26,7 @@ public class LikeV1Controller {
         @AuthUser AuthUserContext authUser,
         @PathVariable Long productId
     ) {
-        likeFacade.like(authUser.userId(), productId);
+        likeApplicationService.like(authUser.userId(), productId);
         return ApiResponse.success(null);
     }
 
@@ -39,7 +39,7 @@ public class LikeV1Controller {
         @AuthUser AuthUserContext authUser,
         @PathVariable Long productId
     ) {
-        likeFacade.unlike(authUser.userId(), productId);
+        likeApplicationService.unlike(authUser.userId(), productId);
         return ApiResponse.success(null);
     }
 
@@ -48,7 +48,7 @@ public class LikeV1Controller {
         @AuthUser AuthUserContext authUser,
         @PathVariable Long userId
     ) {
-        List<ProductInfo> infos = likeFacade.getLikedProducts(userId);
+        List<ProductInfo> infos = likeApplicationService.getLikedProducts(userId);
         List<ProductV1Dto.ProductResponse> responses = infos.stream()
             .map(ProductV1Dto.ProductResponse::from)
             .toList();

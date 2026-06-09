@@ -12,6 +12,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +56,7 @@ public class CouponApplicationService {
             // 동시 발급 UK 위반 — 발급은 1장만 유효
             throw new CoreException(ErrorType.CONFLICT, "이미 발급받은 쿠폰입니다.", e);
         }
-        return UserCouponInfo.from(userCoupon, template, ZonedDateTime.now());
+        return UserCouponInfo.from(userCoupon, template, ZonedDateTime.now(ZoneId.of("Asia/Seoul")));
     }
 
     /**
@@ -76,7 +77,7 @@ public class CouponApplicationService {
         Map<Long, CouponModel> templates = couponRepository.findAllByIds(templateIds).stream()
             .collect(Collectors.toMap(CouponModel::getId, Function.identity()));
 
-        ZonedDateTime now = ZonedDateTime.now();
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
         return userCoupons.stream()
             .filter(uc -> templates.containsKey(uc.getCouponId()))   // 삭제된 템플릿 참조 건너뜀 (NPE 방지)
             .map(uc -> UserCouponInfo.from(uc, templates.get(uc.getCouponId()), now))
@@ -122,7 +123,7 @@ public class CouponApplicationService {
     @Transactional(readOnly = true)
     public List<UserCouponInfo> getIssues(Long couponId, int page, int size) {
         CouponModel template = findTemplateOrThrow(couponId);
-        ZonedDateTime now = ZonedDateTime.now();
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
         return userCouponRepository.findByCouponId(couponId, page, size).stream()
             .map(uc -> UserCouponInfo.from(uc, template, now))
             .toList();

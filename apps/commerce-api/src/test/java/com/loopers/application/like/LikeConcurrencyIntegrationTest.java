@@ -1,5 +1,6 @@
 package com.loopers.application.like;
 
+import com.loopers.application.like.LikeApplicationService;
 import com.loopers.domain.brand.BrandModel;
 import com.loopers.domain.brand.BrandRepository;
 import com.loopers.domain.product.ProductModel;
@@ -14,6 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 class LikeConcurrencyIntegrationTest {
 
-    @Autowired private LikeFacade likeFacade;
+    @Autowired private LikeApplicationService likeApplicationService;
     @Autowired private BrandRepository brandRepository;
     @Autowired private ProductRepository productRepository;
     @Autowired private DatabaseCleanUp databaseCleanUp;
@@ -53,17 +55,17 @@ class LikeConcurrencyIntegrationTest {
             long userId = i + 1;
             executor.submit(() -> {
                 try {
-                    likeFacade.like(userId, product.getId());
+                    likeApplicationService.like(userId, product.getId());
                 } finally {
                     latch.countDown();
                 }
             });
         }
-        latch.await();
+        latch.await(30, TimeUnit.SECONDS);
         executor.shutdown();
 
         // assert — 좋아요 수는 정확히 유저 수만큼
-        assertThat(likeFacade.countByProductId(product.getId())).isEqualTo(threadCount);
+        assertThat(likeApplicationService.countByProductId(product.getId())).isEqualTo(threadCount);
     }
 
     @DisplayName("같은 유저가 동일 상품에 동시에 여러 번 좋아요해도, 좋아요는 1개만 반영된다 (멱등).")
@@ -83,7 +85,7 @@ class LikeConcurrencyIntegrationTest {
         for (int i = 0; i < threadCount; i++) {
             executor.submit(() -> {
                 try {
-                    likeFacade.like(userId, product.getId());
+                    likeApplicationService.like(userId, product.getId());
                 } catch (Exception ignored) {
                     // UK 위반은 멱등 처리되거나 흡수됨
                 } finally {
@@ -91,10 +93,10 @@ class LikeConcurrencyIntegrationTest {
                 }
             });
         }
-        latch.await();
+        latch.await(30, TimeUnit.SECONDS);
         executor.shutdown();
 
         // assert — 멱등: 좋아요는 1개만
-        assertThat(likeFacade.countByProductId(product.getId())).isEqualTo(1L);
+        assertThat(likeApplicationService.countByProductId(product.getId())).isEqualTo(1L);
     }
 }

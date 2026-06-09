@@ -31,6 +31,14 @@ public class StockModel {
     @AttributeOverride(name = "value", column = @Column(name = "quantity", nullable = false))
     private Quantity quantity;
 
+    /**
+     * 낙관적 락 버전 필드.
+     *
+     * <p>주문 시 재고 차감 경로는 {@code SELECT FOR UPDATE}(비관적 락)로 직렬화되므로
+     * 해당 경로에서는 버전 충돌이 발생하지 않는다.
+     * 어드민 재고 직접 수정 경로({@link #changeQuantity})는 비관적 락을 거치지 않으므로,
+     * 동시 주문과의 충돌을 이 버전 필드가 이중으로 방어한다.
+     */
     @Version
     private Long version;
 
@@ -108,7 +116,4 @@ public class StockModel {
         return quantity.getValue();
     }
 
-    public Long getVersion() {
-        return version;
-    }
 }
