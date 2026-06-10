@@ -72,14 +72,6 @@ public class StockModel {
         this.quantity = this.quantity.minus(amount);
     }
 
-    public void restore(int qty) {
-        Quantity amount = Quantity.of(qty);
-        if (!amount.isPositive()) {
-            throw new CoreException(ErrorType.BAD_REQUEST, "복구 수량은 1 이상이어야 합니다.");
-        }
-        this.quantity = this.quantity.plus(amount);
-    }
-
     /**
      * 재고 수량을 절대값으로 설정한다. 어드민이 상품 수정 시 재고를 직접 조정하는 용도.
      */

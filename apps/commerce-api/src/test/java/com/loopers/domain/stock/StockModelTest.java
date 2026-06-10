@@ -81,27 +81,6 @@ class StockModelTest {
         }
     }
 
-    @DisplayName("재고를 복구할 때,")
-    @Nested
-    class Restore {
-
-        @DisplayName("정상적으로 복구되어 수량이 증가한다.")
-        @Test
-        void restoresQuantity() {
-            StockModel stock = StockModel.of(1L, 5);
-            stock.restore(3);
-            assertThat(stock.getQuantity()).isEqualTo(8);
-        }
-
-        @DisplayName("복구 수량이 1 미만이면 BAD_REQUEST 예외가 발생한다.")
-        @Test
-        void throwsBadRequest_whenRestoringZero() {
-            StockModel stock = StockModel.of(1L, 5);
-            CoreException result = assertThrows(CoreException.class, () -> stock.restore(0));
-            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
-        }
-    }
-
     @DisplayName("재고 표시 정책은,")
     @Nested
     class DisplayPolicy {

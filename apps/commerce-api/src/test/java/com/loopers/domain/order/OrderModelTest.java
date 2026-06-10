@@ -148,14 +148,6 @@ class OrderModelTest {
             assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
         }
 
-        @DisplayName("PENDING → CANCELLED 로 전이된다.")
-        @Test
-        void cancelsFromPending() {
-            OrderModel order = new OrderModel(1L);
-            order.cancel();
-            assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-        }
-
         @DisplayName("이미 COMPLETED 인 주문을 다시 완료 처리하면 BAD_REQUEST 예외가 발생한다.")
         @Test
         void throwsBadRequest_whenCompletingNonPending() {
@@ -166,14 +158,5 @@ class OrderModelTest {
             assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
         }
 
-        @DisplayName("이미 CANCELLED 인 주문을 다시 취소 처리하면 BAD_REQUEST 예외가 발생한다.")
-        @Test
-        void throwsBadRequest_whenCancellingNonPending() {
-            OrderModel order = new OrderModel(1L);
-            order.cancel();
-
-            CoreException result = assertThrows(CoreException.class, order::cancel);
-            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
-        }
     }
 }

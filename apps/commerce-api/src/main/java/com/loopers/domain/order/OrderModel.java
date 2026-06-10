@@ -106,13 +106,6 @@ public class OrderModel extends BaseEntity {
         this.status = OrderStatus.COMPLETED;
     }
 
-    public void cancel() {
-        if (this.status != OrderStatus.PENDING) {
-            throw new CoreException(ErrorType.BAD_REQUEST, "대기 중인 주문만 취소할 수 있습니다.");
-        }
-        this.status = OrderStatus.CANCELLED;
-    }
-
     public Long getUserId() {
         return userId;
     }

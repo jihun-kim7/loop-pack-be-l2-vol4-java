@@ -32,8 +32,8 @@ public class PaymentService {
      * - 외부 PG 호출
      * - 결과에 따라 SUCCESS / FAILED로 상태 변경
      *
-     * 호출자(OrderService)가 결과를 보고 보상 로직(주문 취소 + 재고 복구)을 수행한다.
      * 이 메서드는 결제 실패 시 예외를 던지지 않고 PaymentResult로 결과를 전달한다.
+     * 호출자(OrderApplicationService)가 결과를 확인하고 트랜잭션 롤백 여부를 결정한다.
      */
     @Transactional
     public PaymentResult process(Long orderId, Long amount) {
