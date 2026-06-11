@@ -158,5 +158,23 @@ class OrderModelTest {
             assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
         }
 
+        @DisplayName("PENDING → FAILED 로 전이된다 (결제 실패).")
+        @Test
+        void failsFromPending() {
+            OrderModel order = new OrderModel(1L);
+            order.fail();
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.FAILED);
+        }
+
+        @DisplayName("이미 COMPLETED 인 주문을 실패 처리하면 BAD_REQUEST 예외가 발생한다.")
+        @Test
+        void throwsBadRequest_whenFailingNonPending() {
+            OrderModel order = new OrderModel(1L);
+            order.complete();
+
+            CoreException result = assertThrows(CoreException.class, order::fail);
+            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
+        }
+
     }
 }

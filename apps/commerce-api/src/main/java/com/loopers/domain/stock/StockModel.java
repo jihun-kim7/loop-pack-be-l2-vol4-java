@@ -73,6 +73,17 @@ public class StockModel {
     }
 
     /**
+     * 차감된 재고를 복구한다. 결제 실패 보상 트랜잭션에서 사용된다.
+     */
+    public void restore(int qty) {
+        Quantity amount = Quantity.of(qty);
+        if (!amount.isPositive()) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "복구 수량은 1 이상이어야 합니다.");
+        }
+        this.quantity = this.quantity.plus(amount);
+    }
+
+    /**
      * 재고 수량을 절대값으로 설정한다. 어드민이 상품 수정 시 재고를 직접 조정하는 용도.
      */
     public void changeQuantity(int newQuantity) {

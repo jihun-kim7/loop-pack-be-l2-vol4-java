@@ -54,6 +54,32 @@ class UserCouponModelTest {
 
     }
 
+    @DisplayName("사용을 취소할 때 (결제 실패 보상),")
+    @Nested
+    class CancelUse {
+
+        @DisplayName("USED 쿠폰은 AVAILABLE 로 되돌아가고 usedAt 이 초기화된다.")
+        @Test
+        void revertsToAvailable_whenUsed() {
+            UserCouponModel uc = new UserCouponModel(1L, 100L, FUTURE);
+            uc.use(NOW);
+
+            uc.cancelUse();
+
+            assertThat(uc.getStatus()).isEqualTo(CouponStatus.AVAILABLE);
+            assertThat(uc.getUsedAt()).isNull();
+        }
+
+        @DisplayName("사용되지 않은 쿠폰을 취소하면 BAD_REQUEST 예외가 발생한다.")
+        @Test
+        void throwsBadRequest_whenNotUsed() {
+            UserCouponModel uc = new UserCouponModel(1L, 100L, FUTURE);
+
+            CoreException result = assertThrows(CoreException.class, uc::cancelUse);
+            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
+        }
+    }
+
     @DisplayName("소유자 확인은,")
     @Nested
     class Ownership {

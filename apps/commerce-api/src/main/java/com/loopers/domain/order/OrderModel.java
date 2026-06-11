@@ -44,6 +44,15 @@ public class OrderModel extends BaseEntity {
     @Column(name = "ordered_at", nullable = false)
     private ZonedDateTime orderedAt;
 
+    /**
+     * 이 주문에 사용된 발급 쿠폰(UserCoupon) id. 쿠폰 미사용 시 null.
+     *
+     * <p>주문 생성(TX1)과 결제 확정/보상(TX2)이 서로 다른 요청으로 분리되어 있어,
+     * 결제 실패 시 어떤 쿠폰을 복구할지 주문 스스로 알아야 한다.
+     */
+    @Column(name = "user_coupon_id")
+    private Long userCouponId;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItemModel> items = new ArrayList<>();
 
@@ -60,6 +69,11 @@ public class OrderModel extends BaseEntity {
 
     public void addItem(OrderItemModel item) {
         this.items.add(item);
+    }
+
+    /** 사용된 쿠폰을 주문에 연결한다. 결제 실패 보상 시 복구 대상 식별에 사용된다. */
+    public void attachUserCoupon(Long userCouponId) {
+        this.userCouponId = userCouponId;
     }
 
     /** 총액 계산 (Money VO 반환). 도메인 내부 협력용. */
@@ -106,6 +120,14 @@ public class OrderModel extends BaseEntity {
         this.status = OrderStatus.COMPLETED;
     }
 
+    /** 결제 실패 처리 (PENDING → FAILED). 재고/쿠폰 복구는 보상 트랜잭션이 별도로 수행한다. */
+    public void fail() {
+        if (this.status != OrderStatus.PENDING) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "대기 중인 주문만 실패 처리할 수 있습니다.");
+        }
+        this.status = OrderStatus.FAILED;
+    }
+
     public Long getUserId() {
         return userId;
     }
@@ -131,6 +153,11 @@ public class OrderModel extends BaseEntity {
 
     public ZonedDateTime getOrderedAt() {
         return orderedAt;
+    }
+
+    /** 사용된 발급 쿠폰 id. 쿠폰 미사용 주문이면 null. */
+    public Long getUserCouponId() {
+        return userCouponId;
     }
 
     public List<OrderItemModel> getItems() {

@@ -88,6 +88,19 @@ public class UserCouponModel extends BaseEntity {
         this.usedAt = now;
     }
 
+    /**
+     * 사용 처리를 되돌린다 (USED → AVAILABLE). 결제 실패 보상 트랜잭션 전용.
+     *
+     * <p>소프트 삭제 복원({@code BaseEntity#restore})과는 무관하다.
+     */
+    public void cancelUse() {
+        if (this.status != CouponStatus.USED) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "사용된 쿠폰만 사용 취소할 수 있습니다.");
+        }
+        this.status = CouponStatus.AVAILABLE;
+        this.usedAt = null;
+    }
+
     public boolean isExpired(ZonedDateTime now) {
         return expiredAt.isBefore(now);
     }
