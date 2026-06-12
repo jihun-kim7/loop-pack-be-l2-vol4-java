@@ -16,7 +16,4 @@ public interface CouponJpaRepository extends JpaRepository<CouponModel, Long> {
 
     @Query("SELECT c FROM CouponModel c WHERE c.deletedAt IS NULL ORDER BY c.createdAt DESC")
     List<CouponModel> findAllByDeletedAtIsNull(Pageable pageable);
-
-    @Query("SELECT c FROM CouponModel c WHERE c.id IN :ids AND c.deletedAt IS NULL")
-    List<CouponModel> findAllByIdInAndDeletedAtIsNull(@Param("ids") List<Long> ids);
 }

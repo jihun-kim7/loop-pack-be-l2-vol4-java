@@ -3,8 +3,8 @@ package com.loopers.support.error;
 /**
  * 결제 실패 전용 예외.
  *
- * <p>주문 생성 트랜잭션 안에서 결제 실패 시 throw 한다.
- * 결제 실패는 재고 차감·쿠폰 사용 등 선행 처리까지 모두 롤백하여 일관성을 유지한다.
+ * <p>결제 승인(confirm)이 PG 에서 거절됐을 때, 점유했던 자원(재고/쿠폰)을
+ * 보상 트랜잭션으로 복구하고 주문을 FAILED 처리한 뒤 throw 한다.
  * 사용자에게는 400 BAD_REQUEST 로 결제 실패가 응답된다.
  */
 public class PaymentFailedException extends CoreException {

@@ -6,6 +6,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.time.ZonedDateTime;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -140,7 +142,7 @@ class OrderModelTest {
     @Nested
     class StateTransition {
 
-        private final java.time.ZonedDateTime now = java.time.ZonedDateTime.now();
+        private final ZonedDateTime now = ZonedDateTime.now();
 
         @DisplayName("PENDING → PAYMENT_IN_PROGRESS 로 전이되고 점유 시작 시각이 기록된다.")
         @Test

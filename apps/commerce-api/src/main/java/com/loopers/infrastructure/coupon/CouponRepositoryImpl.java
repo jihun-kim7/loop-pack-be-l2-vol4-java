@@ -31,12 +31,6 @@ public class CouponRepositoryImpl implements CouponRepository {
     }
 
     @Override
-    public List<CouponModel> findAllByIds(List<Long> ids) {
-        if (ids.isEmpty()) return List.of();
-        return couponJpaRepository.findAllByIdInAndDeletedAtIsNull(ids);
-    }
-
-    @Override
     public void delete(CouponModel coupon) {
         coupon.delete();   // soft delete
         couponJpaRepository.save(coupon);

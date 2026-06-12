@@ -8,6 +8,5 @@ public interface CouponRepository {
     CouponModel save(CouponModel coupon);
     Optional<CouponModel> findById(Long id);
     List<CouponModel> findAll(int page, int size);
-    List<CouponModel> findAllByIds(List<Long> ids);
     void delete(CouponModel coupon);
 }
