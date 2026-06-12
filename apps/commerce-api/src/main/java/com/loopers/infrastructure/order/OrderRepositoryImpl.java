@@ -38,7 +38,17 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
+    public Optional<OrderModel> findByIdForUpdate(Long id) {
+        return orderJpaRepository.findByIdForUpdate(id);
+    }
+
+    @Override
     public List<OrderModel> findByStatusAndOrderedAtBefore(OrderStatus status, ZonedDateTime before) {
         return orderJpaRepository.findByStatusAndOrderedAtBefore(status, before);
+    }
+
+    @Override
+    public List<OrderModel> findByStatusAndPaymentStartedAtBefore(OrderStatus status, ZonedDateTime before) {
+        return orderJpaRepository.findByStatusAndPaymentStartedAtBefore(status, before);
     }
 }

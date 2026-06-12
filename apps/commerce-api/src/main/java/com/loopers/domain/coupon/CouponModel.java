@@ -19,6 +19,8 @@ import java.time.ZonedDateTime;
  *
  * <p>실제 사용자가 보유·사용하는 것은 {@link UserCouponModel}(발급분)이며,
  * 이 템플릿은 할인 정책(타입/값/최소주문금액/만료시각)만 정의한다.
+ * 발급 시 혜택이 발급분으로 스냅샷되므로, 템플릿 수정은 이후 발급분에만 영향을 준다 —
+ * 검증/할인 계산은 발급분({@code UserCouponModel.validateApplicable/calculateDiscount})이 수행한다.
  */
 @Entity
 @Table(name = "coupons")
@@ -73,31 +75,6 @@ public class CouponModel extends BaseEntity {
             throw new CoreException(ErrorType.BAD_REQUEST, "만료 시각은 필수입니다.");
         }
         type.validateValue(value);
-    }
-
-    /**
-     * 이 쿠폰이 주어진 주문 금액·시점에 적용 가능한지 검증한다.
-     *
-     * <p>만료 여부와 최소 주문 금액 조건을 한 곳에서 명시적으로 확인한다.
-     * ApplicationService 에서 {@link #calculateDiscount} 호출 전에 반드시 먼저 호출해야 한다.
-     */
-    public void validateApplicable(Money orderAmount, ZonedDateTime now) {
-        if (isExpired(now)) {
-            throw new CoreException(ErrorType.BAD_REQUEST, "만료된 쿠폰입니다.");
-        }
-        if (!orderAmount.isGreaterThanOrEqual(minOrderAmount)) {
-            throw new CoreException(ErrorType.BAD_REQUEST,
-                "최소 주문 금액(" + minOrderAmount.getAmount() + "원) 조건을 충족하지 못해 쿠폰을 사용할 수 없습니다.");
-        }
-    }
-
-    /**
-     * 주문 금액에 대한 할인 금액을 계산한다.
-     *
-     * <p>반드시 {@link #validateApplicable} 호출 이후에 사용해야 한다.
-     */
-    public Money calculateDiscount(Money orderAmount) {
-        return type.calculateDiscount(orderAmount, value);
     }
 
     public boolean isExpired(ZonedDateTime now) {

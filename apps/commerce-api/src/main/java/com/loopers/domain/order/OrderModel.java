@@ -53,6 +53,16 @@ public class OrderModel extends BaseEntity {
     @Column(name = "user_coupon_id")
     private Long userCouponId;
 
+    /**
+     * 자원 점유(재고 차감 + 쿠폰 사용)가 완료되어 결제 승인 대기를 시작한 시각.
+     *
+     * <p>만료 스케줄러는 PENDING 은 orderedAt 기준으로, PAYMENT_IN_PROGRESS 는
+     * 이 시각 기준으로 판정한다 — 주문을 30분 전에 만들고 방금 confirm 한 건을
+     * 승인 도중에 만료시키는 사고를 막기 위함.
+     */
+    @Column(name = "payment_started_at")
+    private ZonedDateTime paymentStartedAt;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItemModel> items = new ArrayList<>();
 
@@ -113,17 +123,38 @@ public class OrderModel extends BaseEntity {
         this.totalPrice = this.originalAmount.minus(capped);
     }
 
-    public void complete() {
+    /**
+     * 결제 승인 직전, 자원 점유 시작 (PENDING → PAYMENT_IN_PROGRESS).
+     *
+     * <p>이 전이가 같은 주문에 대한 중복 confirm 의 1차 방어선이다 —
+     * 호출 측이 주문 행을 비관적 락으로 잡은 상태에서 호출하면, 두 번째 confirm 은
+     * 락 해제 후 이 가드에서 거부된다.
+     */
+    public void startPayment(ZonedDateTime now) {
         if (this.status != OrderStatus.PENDING) {
-            throw new CoreException(ErrorType.BAD_REQUEST, "대기 중인 주문만 완료 처리할 수 있습니다.");
+            throw new CoreException(ErrorType.BAD_REQUEST, "결제 대기 상태의 주문이 아닙니다.");
+        }
+        this.status = OrderStatus.PAYMENT_IN_PROGRESS;
+        this.paymentStartedAt = now;
+    }
+
+    /** 결제 승인 성공 확정 (PAYMENT_IN_PROGRESS → COMPLETED). */
+    public void complete() {
+        if (this.status != OrderStatus.PAYMENT_IN_PROGRESS) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "결제 진행 중인 주문만 완료 처리할 수 있습니다.");
         }
         this.status = OrderStatus.COMPLETED;
     }
 
-    /** 결제 실패 처리 (PENDING → FAILED). 재고/쿠폰 복구는 보상 트랜잭션이 별도로 수행한다. */
+    /**
+     * 주문 실패 처리 (PENDING/PAYMENT_IN_PROGRESS → FAILED).
+     *
+     * <p>PENDING 에서: 만료/점유 실패 — 점유한 자원이 없으므로 상태만 닫는다.
+     * PAYMENT_IN_PROGRESS 에서: 승인 실패/미결제 확인 — 재고/쿠폰 복구는 보상 트랜잭션이 별도로 수행한다.
+     */
     public void fail() {
-        if (this.status != OrderStatus.PENDING) {
-            throw new CoreException(ErrorType.BAD_REQUEST, "대기 중인 주문만 실패 처리할 수 있습니다.");
+        if (this.status != OrderStatus.PENDING && this.status != OrderStatus.PAYMENT_IN_PROGRESS) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "이미 확정된 주문은 실패 처리할 수 없습니다.");
         }
         this.status = OrderStatus.FAILED;
     }
@@ -158,6 +189,11 @@ public class OrderModel extends BaseEntity {
     /** 사용된 발급 쿠폰 id. 쿠폰 미사용 주문이면 null. */
     public Long getUserCouponId() {
         return userCouponId;
+    }
+
+    /** 자원 점유 시작 시각. PAYMENT_IN_PROGRESS 진입 전이면 null. */
+    public ZonedDateTime getPaymentStartedAt() {
+        return paymentStartedAt;
     }
 
     public List<OrderItemModel> getItems() {

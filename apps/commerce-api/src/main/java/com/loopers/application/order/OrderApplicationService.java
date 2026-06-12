@@ -15,20 +15,24 @@ import java.util.List;
 /**
  * 주문 유스케이스 Application Service (스타일 2 - Percival 정통).
  *
- * <p><strong>주문과 결제의 분리 (Round 4)</strong> — 실제 PG 의 인증 → 승인 2단계 모델을 따라
- * 주문 생성과 결제 확정이 서로 다른 HTTP 요청으로 분리되어 있다:
+ * <p><strong>무점유 주문 + 승인 직전 점유 (Round 4)</strong> — 실제 PG 의 인증 → 승인
+ * 2단계 모델을 따라 주문 생성과 결제 확정이 서로 다른 HTTP 요청으로 분리되어 있고,
+ * 자원(재고/쿠폰) 점유는 결제 승인 직전으로 미뤄진다:
  *
  * <ol>
- *   <li><strong>POST /orders (여기)</strong> — 재고 차감(비관적 락) + 쿠폰 사용(낙관적 락) +
- *       주문 PENDING 저장 후 즉시 커밋. 프론트는 응답받은 orderId/금액으로 PG 결제창(인증)을 연다.</li>
- *   <li><strong>(프론트-PG 구간)</strong> — 유저가 결제창에서 인증. 서버는 관여하지 않는다.
- *       이 구간 동안 재고 row lock 은 이미 해제되어 있어 다른 주문을 막지 않는다.</li>
+ *   <li><strong>POST /orders (여기)</strong> — 재고 확인 + 쿠폰 검증/할인 계산 + 주문 PENDING 저장.
+ *       <strong>아무 자원도 점유하지 않는 견적</strong>이다. 프론트는 응답받은 orderId/금액으로
+ *       PG 결제창(인증)을 연다.</li>
+ *   <li><strong>(프론트-PG 구간)</strong> — 유저가 결제창에서 인증. 서버는 관여하지 않으며,
+ *       유저가 이탈해도 잠긴 자원이 없다.</li>
  *   <li><strong>POST /payments/confirm</strong> ({@link com.loopers.application.payment.PaymentApplicationService})
- *       — 금액 위변조 검증 후 PG 승인 호출. 성공 시 COMPLETED, 실패 시 보상(재고/쿠폰 복구 + FAILED).</li>
+ *       — 금액 위변조 검증 → <strong>자원 점유(재고 원자 차감 + 쿠폰 확정)</strong> → PG 승인 →
+ *       성공 시 COMPLETED / 실패 시 보상. 점유 실패자는 승인 전에 탈락하므로 청구되지 않는다.</li>
  * </ol>
  *
- * <p><strong>방치된 PENDING 주문</strong>: 유저가 결제창에서 이탈하면 주문이 PENDING 으로 남는다.
- * {@link PendingOrderExpirationScheduler}가 주기적으로 PG 결제 여부를 조회한 뒤 만료 처리한다.
+ * <p><strong>미완결 주문 정리</strong>: {@link PendingOrderExpirationScheduler}가 이탈한
+ * PENDING(무점유 — 상태만 닫음)과 승인 결과 미상인 PAYMENT_IN_PROGRESS(PG 조회 후 확정/보상)를
+ * 주기적으로 처리한다.
  */
 @RequiredArgsConstructor
 @Service
@@ -38,9 +42,10 @@ public class OrderApplicationService {
     private final OrderRepository orderRepository;
 
     /**
-     * 주문 생성 — 재고/쿠폰 점유 + PENDING 저장까지. 결제는 포함하지 않는다.
+     * 주문 생성 — 무점유 견적. 재고 확인/쿠폰 검증과 금액 확정만 수행하고 PENDING 으로 저장한다.
      *
      * <p>응답의 orderId/totalPrice 가 프론트의 PG 결제창 호출 파라미터가 된다.
+     * 자원 점유(재고 차감/쿠폰 사용)는 결제 승인 직전(confirm)에 일어난다.
      *
      * @param couponId 적용할 발급 쿠폰(UserCoupon) id. 미적용 시 null.
      */

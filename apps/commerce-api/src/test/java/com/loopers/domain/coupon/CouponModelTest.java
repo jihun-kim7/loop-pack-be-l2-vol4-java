@@ -1,6 +1,5 @@
 package com.loopers.domain.coupon;
 
-import com.loopers.domain.common.Money;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import org.junit.jupiter.api.DisplayName;
@@ -53,66 +52,8 @@ class CouponModelTest {
         }
     }
 
-    @DisplayName("할인 금액을 계산할 때,")
-    @Nested
-    class CalculateDiscount {
-
-        @DisplayName("정액 쿠폰은 고정 금액을 할인한다.")
-        @Test
-        void fixedDiscount() {
-            CouponModel coupon = new CouponModel("3천원 할인", CouponType.FIXED, 3000, null, FUTURE);
-            Money discount = coupon.calculateDiscount(Money.of(10_000L));
-            assertThat(discount.getAmount()).isEqualTo(3000L);
-        }
-
-        @DisplayName("정액 쿠폰 할인액이 주문금액을 초과하면 주문금액까지만 할인한다 (음수 결제 방지).")
-        @Test
-        void fixedDiscount_cappedAtOrderAmount() {
-            CouponModel coupon = new CouponModel("만원 할인", CouponType.FIXED, 10_000, null, FUTURE);
-            Money discount = coupon.calculateDiscount(Money.of(3_000L));
-            assertThat(discount.getAmount()).isEqualTo(3_000L);
-        }
-
-        @DisplayName("정률 쿠폰은 비율만큼 내림으로 할인한다.")
-        @Test
-        void rateDiscount() {
-            CouponModel coupon = new CouponModel("10% 할인", CouponType.RATE, 10, null, FUTURE);
-            Money discount = coupon.calculateDiscount(Money.of(33_333L));
-            assertThat(discount.getAmount()).isEqualTo(3_333L);   // 3,333.3 내림
-        }
-
-    }
-
-    @DisplayName("적용 가능 여부를 검증할 때,")
-    @Nested
-    class ValidateApplicable {
-
-        @DisplayName("만료된 쿠폰이면 BAD_REQUEST 예외가 발생한다.")
-        @Test
-        void throwsBadRequest_whenExpired() {
-            ZonedDateTime now = ZonedDateTime.now();
-            CouponModel coupon = new CouponModel("만료", CouponType.FIXED, 1000, null, now.minusSeconds(1));
-            CoreException result = assertThrows(CoreException.class,
-                () -> coupon.validateApplicable(Money.of(10_000L), now));
-            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
-        }
-
-        @DisplayName("최소 주문 금액 미달이면 BAD_REQUEST 예외가 발생한다.")
-        @Test
-        void throwsBadRequest_whenBelowMinOrderAmount() {
-            CouponModel coupon = new CouponModel("조건부", CouponType.FIXED, 1000, 10_000L, FUTURE);
-            CoreException result = assertThrows(CoreException.class,
-                () -> coupon.validateApplicable(Money.of(9_999L), ZonedDateTime.now()));
-            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
-        }
-
-        @DisplayName("유효하고 최소 금액 조건을 충족하면 예외가 발생하지 않는다.")
-        @Test
-        void doesNotThrow_whenApplicable() {
-            CouponModel coupon = new CouponModel("조건부", CouponType.FIXED, 1000, 10_000L, FUTURE);
-            coupon.validateApplicable(Money.of(10_000L), ZonedDateTime.now());
-        }
-    }
+    // 할인 계산/적용 가능 검증은 발급 시점 혜택 스냅샷을 가진 UserCouponModel 의 책임으로 이동했다.
+    // 해당 테스트는 UserCouponModelTest 가 담당한다.
 
     @DisplayName("만료 여부는,")
     @Nested

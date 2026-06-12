@@ -15,55 +15,84 @@ import java.time.ZonedDateTime;
 import java.util.List;
 
 /**
- * 방치된 PENDING 주문 만료 스케줄러.
+ * 미완결 주문 만료 스케줄러.
  *
- * <p><strong>왜 필요한가</strong>: 주문 생성(TX1)과 결제 확정(confirm)이 분리되어 있어,
- * 유저가 PG 결제창에서 이탈하면 재고/쿠폰을 점유한 PENDING 주문이 영구히 남는다.
- * 이 케이스는 <strong>웹훅으로 덮을 수 없다</strong> — 유저가 인증을 시작도 안 했다면
- * PG 에는 이 거래의 기록 자체가 없어서 통지할 이벤트가 존재하지 않는다.
- * 방치된 주문은 우리만 알 수 있으므로, 우리 쪽 스케줄러가 정리해야 한다.
+ * <p>무점유 주문 설계에서 미완결 주문은 두 종류이며, <strong>점유 여부가 달라 처리도 다르다</strong>:
+ * <ul>
+ *   <li><strong>PENDING</strong> (무점유 견적) — 유저가 결제창에서 이탈한 빈 껍데기.
+ *       점유한 자원이 없으므로 상태만 FAILED 로 닫는다. PG 승인은 점유(bind) 후에만
+ *       호출되므로 PENDING 주문에 결제가 존재할 수 없다 — PG 조회도 불필요.</li>
+ *   <li><strong>PAYMENT_IN_PROGRESS</strong> (점유 완료, 승인 결과 미상) — confirm 도중
+ *       크래시/타임아웃으로 남은 건. 무턱대고 복구하면 "결제는 됐는데 주문만 실패" 사고가
+ *       되므로, PG 결제 조회로 진실을 확인해 결제됐으면 COMPLETED 확정,
+ *       아니면 재고/쿠폰 복구 후 FAILED 처리한다.</li>
+ * </ul>
  *
- * <p><strong>만료 전 PG 조회로 이중 확인</strong>: 승인 타임아웃처럼 "실제로는 결제됐는데
- * 우리만 모르는" 주문을 무턱대고 보상(재고 복구)하면 "돈은 나갔는데 주문은 실패" 사고가 된다.
- * 만료 처리 전 PG 결제 조회로 진실을 확인해, 결제된 주문은 COMPLETED 로 확정하고
- * 결제 안 된 주문만 보상한다. (실서비스의 대사 개념을 단순화한 것)
+ * <p>이 구분을 못 하면 무점유 PENDING 주문에 재고를 "복구"해서 재고가 불어나는 사고가 난다 —
+ * 점유 여부를 상태로 분리한 이유.
  *
- * <p><strong>동시성</strong>: 스케줄러의 만료 처리와 뒤늦게 돌아온 유저의 confirm 이 경합해도,
- * 주문 상태 머신 가드(complete/fail 모두 PENDING 에서만 전이 허용)가 한쪽만 통과시킨다.
+ * <p><strong>판정 기준 시각도 다르다</strong>: PENDING 은 주문 생성 시각(orderedAt) 기준 30분,
+ * PAYMENT_IN_PROGRESS 는 점유 시작 시각(paymentStartedAt) 기준 10분. 주문을 30분 전에
+ * 만들고 방금 confirm 한 건을 승인 도중에 만료시키지 않기 위함이다.
+ *
+ * <p><strong>동시성</strong>: 보상/확정 모두 주문 행 비관적 락 + 상태 가드로 직렬화되어,
+ * 뒤늦게 도착한 confirm 응답 처리와 경합해도 한쪽만 통과한다.
  *
  * <p><strong>알려진 한계</strong>: {@code @Scheduled} 는 다중 인스턴스 환경에서 중복 실행된다.
- * 실서비스에서는 ShedLock 같은 분산 락이나 Spring Batch + 외부 트리거로 단일 실행을 보장해야
- * 하지만, 과제 범위(단일 인스턴스)에서는 다루지 않는다. (중복 실행되더라도 상태 머신 가드 덕에
- * 이중 보상은 일어나지 않는다 — 한쪽은 상태 전이에서 거부된다)
+ * 실서비스에서는 ShedLock 같은 분산 락이 필요하지만 과제 범위(단일 인스턴스)에서는 다루지 않는다.
  */
 @Slf4j
 @RequiredArgsConstructor
 @Component
 public class PendingOrderExpirationScheduler {
 
-    /** PG 인증 유효시간을 고려한 만료 기준 (분). 이 시간 안에 confirm 이 없으면 이탈로 간주. */
-    private static final int EXPIRE_AFTER_MINUTES = 30;
+    /** 무점유 견적(PENDING)의 만료 기준 — 주문 생성 후 이 시간 내 confirm 이 없으면 이탈로 간주. */
+    private static final int PENDING_EXPIRE_MINUTES = 30;
+
+    /** 점유 완료(PAYMENT_IN_PROGRESS) 건의 판정 기준 — 승인 호출은 수 초면 끝나므로 충분히 보수적인 값. */
+    private static final int IN_PROGRESS_RESOLVE_MINUTES = 10;
 
     private final OrderRepository orderRepository;
     private final PaymentGateway paymentGateway;
     private final OrderTransactionService orderTransactionService;
 
     @Scheduled(fixedDelay = 60_000)
-    public void expireStalePendingOrders() {
-        ZonedDateTime cutoff = ZonedDateTime.now(ZoneId.of("Asia/Seoul")).minusMinutes(EXPIRE_AFTER_MINUTES);
-        List<OrderModel> staleOrders = orderRepository.findByStatusAndOrderedAtBefore(OrderStatus.PENDING, cutoff);
-        for (OrderModel order : staleOrders) {
+    public void expireStaleOrders() {
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
+        expireAbandonedPendingOrders(now);
+        resolveInProgressOrders(now);
+    }
+
+    /** 무점유 견적 정리 — 복구할 자원이 없으므로 상태만 닫는다. */
+    private void expireAbandonedPendingOrders(ZonedDateTime now) {
+        List<OrderModel> abandoned = orderRepository.findByStatusAndOrderedAtBefore(
+            OrderStatus.PENDING, now.minusMinutes(PENDING_EXPIRE_MINUTES));
+        for (OrderModel order : abandoned) {
             try {
-                resolve(order);
+                orderTransactionService.markOrderFailed(order.getId());
+                log.info("이탈 PENDING 주문 만료 처리. orderId: {}", order.getId());
             } catch (Exception e) {
-                // 한 건의 실패가 나머지 만료 처리를 막지 않도록 격리
                 log.warn("PENDING 주문 만료 처리 실패 — orderId: {}", order.getId(), e);
             }
         }
     }
 
+    /** 점유 완료 + 승인 결과 미상 건 — PG 조회로 진실 확인 후 확정/보상. */
+    private void resolveInProgressOrders(ZonedDateTime now) {
+        List<OrderModel> unresolved = orderRepository.findByStatusAndPaymentStartedAtBefore(
+            OrderStatus.PAYMENT_IN_PROGRESS, now.minusMinutes(IN_PROGRESS_RESOLVE_MINUTES));
+        for (OrderModel order : unresolved) {
+            try {
+                resolve(order);
+            } catch (Exception e) {
+                // 한 건의 실패가 나머지 처리를 막지 않도록 격리
+                log.warn("PAYMENT_IN_PROGRESS 주문 판정 실패 — orderId: {}", order.getId(), e);
+            }
+        }
+    }
+
     private void resolve(OrderModel order) {
-        // 만료 전 PG 조회 — "결제는 됐는데 confirm 만 유실된" 주문을 보상해버리는 사고 방지
+        // 점유까지 한 주문 — PG 조회로 "결제는 됐는데 우리만 모르는" 케이스를 먼저 확인
         boolean paidAtPg = paymentGateway.inquire(order.getId())
             .map(PaymentResult::isSuccess)
             .orElse(false);
@@ -72,8 +101,8 @@ public class PendingOrderExpirationScheduler {
             orderTransactionService.completePayment(order.getId());
             log.info("PG 조회 결과 결제 완료 확인 — 주문 확정 처리. orderId: {}", order.getId());
         } else {
-            orderTransactionService.failPaymentAndRelease(order.getId());
-            log.info("미결제 PENDING 주문 만료 — 재고/쿠폰 복구. orderId: {}", order.getId());
+            orderTransactionService.releaseAndFail(order.getId());
+            log.info("미결제 확인 — 점유 자원(재고/쿠폰) 복구. orderId: {}", order.getId());
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.loopers.application.order;
 
+import com.loopers.application.payment.PaymentApplicationService;
 import com.loopers.domain.brand.BrandModel;
 import com.loopers.domain.brand.BrandRepository;
 import com.loopers.domain.coupon.CouponModel;
@@ -31,15 +32,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 주문 동시성 통합 테스트.
+ * 주문-결제 동시성 통합 테스트.
  *
- * <p>실제 MySQL(Testcontainers) 위에서 락이 동작해야 의미가 있으므로 {@link SpringBootTest} 로 구동한다.
- * 성공 수 / 실패 수 / DB 최종 상태를 모두 검증한다.
+ * <p>무점유 주문 설계에서 동시성 경합 지점은 주문 생성이 아니라 <strong>confirm 의
+ * 자원 점유(조건부 원자 UPDATE 차감 + 쿠폰 낙관적 락)</strong>다. 따라서 각 스레드는
+ * 주문 생성 → confirm 풀 플로우를 수행하고, 점유 단계의 정합성을 검증한다.
+ * 실제 MySQL(Testcontainers) 위에서 동작해야 의미가 있으므로 {@link SpringBootTest} 로 구동한다.
  */
 @SpringBootTest
 class OrderConcurrencyIntegrationTest {
 
     @Autowired private OrderApplicationService orderApplicationService;
+    @Autowired private PaymentApplicationService paymentApplicationService;
     @Autowired private BrandRepository brandRepository;
     @Autowired private ProductRepository productRepository;
     @Autowired private StockRepository stockRepository;
@@ -60,10 +64,24 @@ class OrderConcurrencyIntegrationTest {
         return product;
     }
 
-    @DisplayName("재고가 충분하면, 동시 주문이 모두 성공하고 재고도 정확히 차감된다 (비관적 락 정합성).")
+    /** 주문 생성 → confirm 풀 플로우. 결제 확정까지 성공하면 true. */
+    private void orderAndConfirm(Long userId, Long productId, Long couponId,
+                                 AtomicInteger success, AtomicInteger failure) {
+        try {
+            OrderInfo pending = orderApplicationService.createOrder(
+                userId, List.of(new OrderItemCommand(productId, 1)), couponId);
+            paymentApplicationService.confirmPayment(
+                userId, "fake-payment-key", pending.id(), pending.totalPrice());
+            success.incrementAndGet();
+        } catch (Exception e) {
+            failure.incrementAndGet();
+        }
+    }
+
+    @DisplayName("재고가 충분하면, 동시 주문-결제가 모두 성공하고 재고도 정확히 차감된다 (원자적 차감 정합성).")
     @Test
     void allOrdersSucceed_andStockIsAccurate_whenStockIsSufficient() throws InterruptedException {
-        // arrange — 재고 10개, 10명 동시 주문 → 전부 성공하고 재고는 정확히 0
+        // arrange — 재고 10개, 10명 동시 주문-결제 → 전부 성공하고 재고는 정확히 0
         int threadCount = 10;
         ProductModel product = givenProductWithStock(threadCount);
 
@@ -77,10 +95,7 @@ class OrderConcurrencyIntegrationTest {
             long userId = i + 1;
             executor.submit(() -> {
                 try {
-                    orderApplicationService.createOrder(userId, List.of(new OrderItemCommand(product.getId(), 1)), null);
-                    success.incrementAndGet();
-                } catch (Exception e) {
-                    failure.incrementAndGet();
+                    orderAndConfirm(userId, product.getId(), null, success, failure);
                 } finally {
                     latch.countDown();
                 }
@@ -96,10 +111,11 @@ class OrderConcurrencyIntegrationTest {
         assertThat(finalStock.getQuantity()).isZero();
     }
 
-    @DisplayName("동일 상품에 대해 여러 주문이 동시에 요청되어도, 재고가 정확히 차감된다 (비관적 락).")
+    @DisplayName("재고보다 많은 동시 주문-결제가 들어와도, 재고 수만큼만 성공한다 (조건부 원자 UPDATE).")
     @Test
-    void deductsStockExactly_whenConcurrentOrdersOnSameProduct() throws InterruptedException {
-        // arrange — 재고 5개, 10명이 1개씩 동시 주문
+    void deductsStockExactly_whenConcurrentOrdersExceedStock() throws InterruptedException {
+        // arrange — 재고 5개, 10명이 1개씩. 무점유 견적이라 주문 생성은 10명 전부 통과하고,
+        //           confirm 의 조건부 차감(WHERE quantity >= ?)이 정확히 5명만 통과시켜야 한다
         int stock = 5;
         int threadCount = 10;
         ProductModel product = givenProductWithStock(stock);
@@ -114,10 +130,7 @@ class OrderConcurrencyIntegrationTest {
             long userId = i + 1;
             executor.submit(() -> {
                 try {
-                    orderApplicationService.createOrder(userId, List.of(new OrderItemCommand(product.getId(), 1)), null);
-                    success.incrementAndGet();
-                } catch (Exception e) {
-                    failure.incrementAndGet();
+                    orderAndConfirm(userId, product.getId(), null, success, failure);
                 } finally {
                     latch.countDown();
                 }
@@ -126,20 +139,21 @@ class OrderConcurrencyIntegrationTest {
         latch.await(30, TimeUnit.SECONDS);
         executor.shutdown();
 
-        // assert — 정확히 재고 수만큼 성공, 재고는 0, 음수 없음
+        // assert — 정확히 재고 수만큼 성공, 재고는 0, 음수 없음. 탈락자는 승인 전에 거부됨
         StockModel finalStock = stockRepository.findByProductId(product.getId()).orElseThrow();
         assertThat(success.get()).isEqualTo(stock);
         assertThat(failure.get()).isEqualTo(threadCount - stock);
         assertThat(finalStock.getQuantity()).isZero();
     }
 
-    @DisplayName("동일한 쿠폰으로 여러 기기에서 동시에 주문해도, 쿠폰은 단 한 번만 사용된다 (낙관적 락).")
+    @DisplayName("동일한 쿠폰으로 여러 기기에서 동시에 주문-결제해도, 쿠폰은 단 한 번만 사용된다 (낙관적 락).")
     @Test
     void usesCouponOnce_whenConcurrentOrdersWithSameCoupon() throws InterruptedException {
-        // arrange — 재고 충분, 한 유저가 쿠폰 1장 보유, 같은 쿠폰으로 동시 주문 10건
+        // arrange — 재고 충분, 한 유저가 쿠폰 1장 보유. 견적(주문 생성)은 10건 모두 가능하지만
+        //           confirm 의 쿠폰 확정(낙관적 락)은 한 건만 통과해야 한다
         int threadCount = 10;
         long userId = 1L;
-        ProductModel product = givenProductWithStock(threadCount);   // 재고는 충분히 확보(쿠폰만 경쟁)
+        ProductModel product = givenProductWithStock(threadCount);
         CouponModel coupon = couponRepository.save(
             new CouponModel("1만원 할인", CouponType.FIXED, 10_000, null, ZonedDateTime.now().plusDays(1)));
         UserCouponModel userCoupon = userCouponRepository.save(UserCouponModel.issue(userId, coupon));
@@ -154,10 +168,7 @@ class OrderConcurrencyIntegrationTest {
         for (int i = 0; i < threadCount; i++) {
             executor.submit(() -> {
                 try {
-                    orderApplicationService.createOrder(userId, List.of(new OrderItemCommand(product.getId(), 1)), userCouponId);
-                    success.incrementAndGet();
-                } catch (Exception e) {
-                    failure.incrementAndGet();
+                    orderAndConfirm(userId, product.getId(), userCouponId, success, failure);
                 } finally {
                     latch.countDown();
                 }
@@ -166,10 +177,12 @@ class OrderConcurrencyIntegrationTest {
         latch.await(30, TimeUnit.SECONDS);
         executor.shutdown();
 
-        // assert — 쿠폰 사용은 단 1건만 성공, 쿠폰 상태는 USED
+        // assert — 결제 확정은 단 1건, 쿠폰 상태는 USED, 재고도 1개만 차감 (탈락 건의 점유는 롤백)
         UserCouponModel finalCoupon = userCouponRepository.findById(userCouponId).orElseThrow();
+        StockModel finalStock = stockRepository.findByProductId(product.getId()).orElseThrow();
         assertThat(success.get()).isEqualTo(1);
         assertThat(failure.get()).isEqualTo(threadCount - 1);
         assertThat(finalCoupon.getStatus()).isEqualTo(CouponStatus.USED);
+        assertThat(finalStock.getQuantity()).isEqualTo(threadCount - 1);
     }
 }

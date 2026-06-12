@@ -1,8 +1,6 @@
 package com.loopers.domain.stock;
 
 import com.loopers.domain.common.Quantity;
-import com.loopers.support.error.CoreException;
-import com.loopers.support.error.ErrorType;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
@@ -32,12 +30,12 @@ public class StockModel {
     private Quantity quantity;
 
     /**
-     * 낙관적 락 버전 필드.
+     * 낙관적 락 버전 필드 — 어드민 직접 수정 경로({@link #changeQuantity}) 보호용.
      *
-     * <p>주문 시 재고 차감 경로는 {@code SELECT FOR UPDATE}(비관적 락)로 직렬화되므로
-     * 해당 경로에서는 버전 충돌이 발생하지 않는다.
-     * 어드민 재고 직접 수정 경로({@link #changeQuantity})는 비관적 락을 거치지 않으므로,
-     * 동시 주문과의 충돌을 이 버전 필드가 이중으로 방어한다.
+     * <p>주문의 재고 차감/복구는 조건부 원자 UPDATE(벌크 쿼리)로 수행되며,
+     * 벌크 쿼리는 JPA 버전 관리를 우회하므로 쿼리에서 {@code version = version + 1}을
+     * 수동으로 증가시킨다. 덕분에 어드민이 절대값 수정 중 동시 주문이 차감하면
+     * 어드민의 커밋이 버전 충돌로 거부되어 차감분 유실(Lost Update)을 막는다.
      */
     @Version
     private Long version;
@@ -59,28 +57,6 @@ public class StockModel {
     @PreUpdate
     private void preUpdate() {
         this.updatedAt = ZonedDateTime.now();
-    }
-
-    public void deduct(int qty) {
-        Quantity amount = Quantity.of(qty);
-        if (!amount.isPositive()) {
-            throw new CoreException(ErrorType.BAD_REQUEST, "차감 수량은 1 이상이어야 합니다.");
-        }
-        if (!this.quantity.isGreaterThanOrEqual(amount)) {
-            throw new CoreException(ErrorType.BAD_REQUEST, "재고가 부족합니다.");
-        }
-        this.quantity = this.quantity.minus(amount);
-    }
-
-    /**
-     * 차감된 재고를 복구한다. 결제 실패 보상 트랜잭션에서 사용된다.
-     */
-    public void restore(int qty) {
-        Quantity amount = Quantity.of(qty);
-        if (!amount.isPositive()) {
-            throw new CoreException(ErrorType.BAD_REQUEST, "복구 수량은 1 이상이어야 합니다.");
-        }
-        this.quantity = this.quantity.plus(amount);
     }
 
     /**

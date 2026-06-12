@@ -140,25 +140,46 @@ class OrderModelTest {
     @Nested
     class StateTransition {
 
-        @DisplayName("PENDING → COMPLETED 로 전이된다.")
+        private final java.time.ZonedDateTime now = java.time.ZonedDateTime.now();
+
+        @DisplayName("PENDING → PAYMENT_IN_PROGRESS 로 전이되고 점유 시작 시각이 기록된다.")
         @Test
-        void completesFromPending() {
+        void startsPaymentFromPending() {
             OrderModel order = new OrderModel(1L);
+            order.startPayment(now);
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.PAYMENT_IN_PROGRESS);
+            assertThat(order.getPaymentStartedAt()).isEqualTo(now);
+        }
+
+        @DisplayName("PENDING 이 아닌 주문의 결제 시작은 BAD_REQUEST 예외가 발생한다 (중복 confirm 가드).")
+        @Test
+        void throwsBadRequest_whenStartingPaymentTwice() {
+            OrderModel order = new OrderModel(1L);
+            order.startPayment(now);
+
+            CoreException result = assertThrows(CoreException.class, () -> order.startPayment(now));
+            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
+        }
+
+        @DisplayName("PAYMENT_IN_PROGRESS → COMPLETED 로 전이된다.")
+        @Test
+        void completesFromInProgress() {
+            OrderModel order = new OrderModel(1L);
+            order.startPayment(now);
             order.complete();
             assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
         }
 
-        @DisplayName("이미 COMPLETED 인 주문을 다시 완료 처리하면 BAD_REQUEST 예외가 발생한다.")
+        @DisplayName("자원 점유 전(PENDING) 완료 처리는 BAD_REQUEST 예외가 발생한다.")
         @Test
-        void throwsBadRequest_whenCompletingNonPending() {
+        void throwsBadRequest_whenCompletingBeforeBinding() {
             OrderModel order = new OrderModel(1L);
-            order.complete();
 
             CoreException result = assertThrows(CoreException.class, order::complete);
             assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
         }
 
-        @DisplayName("PENDING → FAILED 로 전이된다 (결제 실패).")
+        @DisplayName("PENDING → FAILED 로 전이된다 (견적 만료/점유 실패).")
         @Test
         void failsFromPending() {
             OrderModel order = new OrderModel(1L);
@@ -166,10 +187,20 @@ class OrderModelTest {
             assertThat(order.getStatus()).isEqualTo(OrderStatus.FAILED);
         }
 
+        @DisplayName("PAYMENT_IN_PROGRESS → FAILED 로 전이된다 (승인 실패 보상).")
+        @Test
+        void failsFromInProgress() {
+            OrderModel order = new OrderModel(1L);
+            order.startPayment(now);
+            order.fail();
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.FAILED);
+        }
+
         @DisplayName("이미 COMPLETED 인 주문을 실패 처리하면 BAD_REQUEST 예외가 발생한다.")
         @Test
-        void throwsBadRequest_whenFailingNonPending() {
+        void throwsBadRequest_whenFailingCompleted() {
             OrderModel order = new OrderModel(1L);
+            order.startPayment(now);
             order.complete();
 
             CoreException result = assertThrows(CoreException.class, order::fail);
