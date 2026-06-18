@@ -40,65 +40,21 @@ class StockModelTest {
         }
     }
 
-    @DisplayName("재고를 차감할 때,")
+    // 재고 차감/복구는 엔티티 메서드가 아니라 조건부 원자 UPDATE(StockRepository)로 수행된다.
+    // 동시성 보장을 포함한 차감/복구 검증은 OrderTransactionServiceIntegrationTest 가 담당한다.
+
+    @DisplayName("hasEnough 는,")
     @Nested
-    class Deduct {
+    class HasEnough {
 
-        @DisplayName("정상적으로 차감되어 수량이 감소한다.")
+        @DisplayName("보유 수량 이하 요청이면 true, 초과면 false 를 반환한다.")
         @Test
-        void deductsQuantity() {
-            // arrange
-            StockModel stock = StockModel.of(1L, 10);
-
-            // act
-            stock.deduct(3);
-
-            // assert
-            assertThat(stock.getQuantity()).isEqualTo(7);
-        }
-
-        @DisplayName("차감 수량이 1 미만이면 BAD_REQUEST 예외가 발생한다.")
-        @ParameterizedTest
-        @ValueSource(ints = {0})
-        void throwsBadRequest_whenDeductingZero(int qty) {
-            StockModel stock = StockModel.of(1L, 10);
-            CoreException result = assertThrows(CoreException.class, () -> stock.deduct(qty));
-            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
-        }
-
-        @DisplayName("재고보다 많이 차감하려 하면 BAD_REQUEST 예외가 발생한다 (재고 음수 방지).")
-        @Test
-        void throwsBadRequest_whenInsufficientStock() {
-            // arrange
+        void checksAvailability() {
             StockModel stock = StockModel.of(1L, 5);
-
-            // act
-            CoreException result = assertThrows(CoreException.class, () -> stock.deduct(10));
-
-            // assert
-            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
-            assertThat(stock.getQuantity()).isEqualTo(5);   // 원자성: 변경 없음
-        }
-    }
-
-    @DisplayName("재고를 복구할 때,")
-    @Nested
-    class Restore {
-
-        @DisplayName("정상적으로 복구되어 수량이 증가한다.")
-        @Test
-        void restoresQuantity() {
-            StockModel stock = StockModel.of(1L, 5);
-            stock.restore(3);
-            assertThat(stock.getQuantity()).isEqualTo(8);
-        }
-
-        @DisplayName("복구 수량이 1 미만이면 BAD_REQUEST 예외가 발생한다.")
-        @Test
-        void throwsBadRequest_whenRestoringZero() {
-            StockModel stock = StockModel.of(1L, 5);
-            CoreException result = assertThrows(CoreException.class, () -> stock.restore(0));
-            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
+            assertAll(
+                () -> assertThat(stock.hasEnough(5)).isTrue(),
+                () -> assertThat(stock.hasEnough(6)).isFalse()
+            );
         }
     }
 

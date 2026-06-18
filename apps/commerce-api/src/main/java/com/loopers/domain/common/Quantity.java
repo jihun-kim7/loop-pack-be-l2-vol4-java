@@ -40,7 +40,11 @@ public class Quantity {
     }
 
     public Quantity plus(Quantity other) {
-        return new Quantity(this.value + other.value);
+        try {
+            return new Quantity(Math.addExact(this.value, other.value));
+        } catch (ArithmeticException e) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "수량 합산이 정수 범위를 초과했습니다.");
+        }
     }
 
     public Quantity minus(Quantity other) {

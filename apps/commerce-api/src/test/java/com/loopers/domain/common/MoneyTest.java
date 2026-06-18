@@ -85,6 +85,20 @@ class MoneyTest {
                 () -> assertThat(b.getAmount()).isEqualTo(500L)
             );
         }
+
+        @DisplayName("합산이 Long 범위를 초과하면 BAD_REQUEST 예외가 발생한다 (오버플로우 방어).")
+        @Test
+        void throwsBadRequest_whenSumOverflows() {
+            // arrange
+            Money max = Money.of(Long.MAX_VALUE);
+            Money one = Money.of(1L);
+
+            // act
+            CoreException result = assertThrows(CoreException.class, () -> max.plus(one));
+
+            // assert
+            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
+        }
     }
 
     @DisplayName("Money 를 뺄 때,")
@@ -158,6 +172,47 @@ class MoneyTest {
 
             // act
             CoreException result = assertThrows(CoreException.class, () -> money.multiply(-1));
+
+            // assert
+            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
+        }
+
+        @DisplayName("곱셈이 Long 범위를 초과하면 BAD_REQUEST 예외가 발생한다 (오버플로우 방어).")
+        @Test
+        void throwsBadRequest_whenProductOverflows() {
+            // arrange
+            Money large = Money.of(Long.MAX_VALUE / 2 + 1);
+
+            // act
+            CoreException result = assertThrows(CoreException.class, () -> large.multiply(2));
+
+            // assert
+            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
+        }
+    }
+
+    @DisplayName("정률 할인 금액을 계산할 때,")
+    @Nested
+    class ApplyRate {
+
+        @DisplayName("amount * percent / 100 을 내림으로 계산한다.")
+        @Test
+        void returnsFlooredDiscount() {
+            assertAll(
+                // 33,333원의 10% = 3,333.3 → 내림 3,333
+                () -> assertThat(Money.of(33_333L).applyRate(10).getAmount()).isEqualTo(3_333L),
+                () -> assertThat(Money.of(10_000L).applyRate(10).getAmount()).isEqualTo(1_000L),
+                () -> assertThat(Money.of(10_000L).applyRate(0).getAmount()).isZero(),
+                () -> assertThat(Money.of(10_000L).applyRate(100).getAmount()).isEqualTo(10_000L)
+            );
+        }
+
+        @DisplayName("할인율이 0~100 범위를 벗어나면 BAD_REQUEST 예외가 발생한다.")
+        @ParameterizedTest
+        @ValueSource(ints = {-1, 101, 200})
+        void throwsBadRequest_whenPercentOutOfRange(int percent) {
+            // act
+            CoreException result = assertThrows(CoreException.class, () -> Money.of(10_000L).applyRate(percent));
 
             // assert
             assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);

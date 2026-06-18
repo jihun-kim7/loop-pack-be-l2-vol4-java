@@ -1,8 +1,9 @@
 package com.loopers.interfaces.api.brand;
 
-import com.loopers.application.brand.BrandFacade;
+import com.loopers.application.brand.BrandApplicationService;
 import com.loopers.application.brand.BrandInfo;
 import com.loopers.interfaces.api.ApiResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -14,7 +15,7 @@ import java.util.List;
 @RequestMapping("/api-admin/v1/brands")
 public class BrandAdminV1Controller {
 
-    private final BrandFacade brandFacade;
+    private final BrandApplicationService brandApplicationService;
 
     @GetMapping
     public ApiResponse<List<BrandV1Dto.BrandResponse>> getBrands(
@@ -22,7 +23,7 @@ public class BrandAdminV1Controller {
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "20") int size
     ) {
-        List<BrandInfo> infos = brandFacade.getBrands(page, size);
+        List<BrandInfo> infos = brandApplicationService.getBrands(page, size);
         List<BrandV1Dto.BrandResponse> responses = infos.stream()
             .map(BrandV1Dto.BrandResponse::from)
             .toList();
@@ -34,7 +35,7 @@ public class BrandAdminV1Controller {
         @RequestHeader("X-Loopers-Ldap") String ldap,
         @PathVariable Long brandId
     ) {
-        BrandInfo info = brandFacade.getBrand(brandId);
+        BrandInfo info = brandApplicationService.getBrand(brandId);
         return ApiResponse.success(BrandV1Dto.BrandResponse.from(info));
     }
 
@@ -42,9 +43,9 @@ public class BrandAdminV1Controller {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<BrandV1Dto.BrandResponse> createBrand(
         @RequestHeader("X-Loopers-Ldap") String ldap,
-        @RequestBody BrandV1Dto.CreateBrandRequest request
+        @Valid @RequestBody BrandV1Dto.CreateBrandRequest request
     ) {
-        BrandInfo info = brandFacade.createBrand(request.name(), request.description());
+        BrandInfo info = brandApplicationService.createBrand(request.name(), request.description());
         return ApiResponse.success(BrandV1Dto.BrandResponse.from(info));
     }
 
@@ -52,9 +53,9 @@ public class BrandAdminV1Controller {
     public ApiResponse<BrandV1Dto.BrandResponse> updateBrand(
         @RequestHeader("X-Loopers-Ldap") String ldap,
         @PathVariable Long brandId,
-        @RequestBody BrandV1Dto.UpdateBrandRequest request
+        @Valid @RequestBody BrandV1Dto.UpdateBrandRequest request
     ) {
-        BrandInfo info = brandFacade.updateBrand(brandId, request.name(), request.description());
+        BrandInfo info = brandApplicationService.updateBrand(brandId, request.name(), request.description());
         return ApiResponse.success(BrandV1Dto.BrandResponse.from(info));
     }
 
@@ -63,7 +64,7 @@ public class BrandAdminV1Controller {
         @RequestHeader("X-Loopers-Ldap") String ldap,
         @PathVariable Long brandId
     ) {
-        brandFacade.deleteBrand(brandId);
+        brandApplicationService.deleteBrand(brandId);
         return ApiResponse.success(null);
     }
 }

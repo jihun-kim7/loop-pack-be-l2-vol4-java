@@ -10,22 +10,22 @@ import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
 
 /**
- * 좋아요 유스케이스 Facade.
+ * 좋아요 유스케이스 Application Service.
  *
  * <p>스타일 2 (DDD 정통): Application Layer 가 조회·검증·저장을 책임지고,
  * 도메인 객체(LikeModel)는 단순 값 보유. Domain Service 는 두지 않는다.
  * 좋아요 등록/취소는 도메인 협력 로직이 없는 단순 유스케이스라 별도 Domain Service 가 불필요하다.
  */
 @RequiredArgsConstructor
-@Component
-public class LikeFacade {
+@Service
+public class LikeApplicationService {
 
     private final LikeRepository likeRepository;
     private final ProductRepository productRepository;
@@ -51,7 +51,9 @@ public class LikeFacade {
         }
 
         try {
-            likeRepository.save(LikeModel.of(userId, productId));
+            // saveAndFlush: 즉시 flush로 UK 위반을 커밋 전에 이 try-catch 안에서 잡기 위함.
+            // save()는 INSERT를 트랜잭션 커밋 시점까지 지연할 수 있어 catch를 우회할 위험이 있다.
+            likeRepository.saveAndFlush(LikeModel.of(userId, productId));
         } catch (DataIntegrityViolationException e) {
             // 동시 요청으로 UK 위반 - 다른 요청이 이미 좋아요를 등록 완료. 멱등성 보장.
         }
@@ -92,7 +94,7 @@ public class LikeFacade {
         );
     }
 
-    /** 상품의 좋아요 수 집계. 다른 Facade(상품 상세/목록)에서 사용. */
+    /** 상품의 좋아요 수 집계. 다른 ApplicationService(상품 상세/목록)에서 사용. */
     @Transactional(readOnly = true)
     public long countByProductId(Long productId) {
         return likeRepository.countByProductId(productId);

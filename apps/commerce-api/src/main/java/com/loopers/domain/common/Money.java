@@ -43,7 +43,11 @@ public class Money {
     }
 
     public Money plus(Money other) {
-        return new Money(this.amount + other.amount);
+        try {
+            return new Money(Math.addExact(this.amount, other.amount));
+        } catch (ArithmeticException e) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "금액 합산이 표현 범위를 초과했습니다.");
+        }
     }
 
     public Money minus(Money other) {
@@ -58,7 +62,29 @@ public class Money {
         if (factor < 0) {
             throw new CoreException(ErrorType.BAD_REQUEST, "금액 곱셈 계수는 0 이상이어야 합니다.");
         }
-        return new Money(this.amount * factor);
+        try {
+            return new Money(Math.multiplyExact(this.amount, (long) factor));
+        } catch (ArithmeticException e) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "금액 곱셈이 표현 범위를 초과했습니다.");
+        }
+    }
+
+    /**
+     * 정률 할인 금액을 계산한다 (정률 쿠폰용).
+     *
+     * <p>{@code amount * percent / 100} 을 <strong>내림(floor)</strong> 으로 계산한다.
+     * 원화는 소수점이 없으므로 1원 미만은 버려 고객에게 불리하지 않게(할인액을 과대 계산하지 않게) 처리한다.
+     * 예: 33,333원의 10% → 3,333원 (3,333.3 내림).
+     *
+     * @param percent 할인율(%). 0~100 범위.
+     * @return 할인 금액 Money
+     */
+    public Money applyRate(int percent) {
+        if (percent < 0 || percent > 100) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "할인율은 0 이상 100 이하여야 합니다.");
+        }
+        long discounted = Math.floorDiv(Math.multiplyExact(this.amount, (long) percent), 100L);
+        return new Money(discounted);
     }
 
     public boolean isGreaterThanOrEqual(Money other) {

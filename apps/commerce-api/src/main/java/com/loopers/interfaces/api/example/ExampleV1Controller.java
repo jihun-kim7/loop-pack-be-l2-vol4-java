@@ -1,6 +1,6 @@
 package com.loopers.interfaces.api.example;
 
-import com.loopers.application.example.ExampleFacade;
+import com.loopers.application.example.ExampleApplicationService;
 import com.loopers.application.example.ExampleInfo;
 import com.loopers.interfaces.api.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -14,14 +14,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/examples")
 public class ExampleV1Controller implements ExampleV1ApiSpec {
 
-    private final ExampleFacade exampleFacade;
+    private final ExampleApplicationService exampleApplicationService;
 
     @GetMapping("/{exampleId}")
     @Override
     public ApiResponse<ExampleV1Dto.ExampleResponse> getExample(
         @PathVariable(value = "exampleId") Long exampleId
     ) {
-        ExampleInfo info = exampleFacade.getExample(exampleId);
+        ExampleInfo info = exampleApplicationService.getExample(exampleId);
         ExampleV1Dto.ExampleResponse response = ExampleV1Dto.ExampleResponse.from(info);
         return ApiResponse.success(response);
     }

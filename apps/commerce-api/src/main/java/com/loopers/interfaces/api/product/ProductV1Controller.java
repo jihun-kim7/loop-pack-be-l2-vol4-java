@@ -1,6 +1,6 @@
 package com.loopers.interfaces.api.product;
 
-import com.loopers.application.product.ProductFacade;
+import com.loopers.application.product.ProductApplicationService;
 import com.loopers.application.product.ProductInfo;
 import com.loopers.interfaces.api.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,7 @@ import java.util.List;
 @RequestMapping("/api/v1/products")
 public class ProductV1Controller {
 
-    private final ProductFacade productFacade;
+    private final ProductApplicationService productApplicationService;
 
     @GetMapping
     public ApiResponse<List<ProductV1Dto.ProductResponse>> getProducts(
@@ -26,7 +26,7 @@ public class ProductV1Controller {
         @RequestParam(required = false, defaultValue = "0") int page,
         @RequestParam(required = false, defaultValue = "20") int size
     ) {
-        List<ProductInfo> infos = productFacade.getProducts(brandId, sort, page, size);
+        List<ProductInfo> infos = productApplicationService.getProducts(brandId, sort, page, size);
         List<ProductV1Dto.ProductResponse> responses = infos.stream()
             .map(ProductV1Dto.ProductResponse::from)
             .toList();
@@ -37,7 +37,7 @@ public class ProductV1Controller {
     public ApiResponse<ProductV1Dto.ProductResponse> getProductDetail(
         @PathVariable Long productId
     ) {
-        ProductInfo info = productFacade.getProductDetail(productId);
+        ProductInfo info = productApplicationService.getProductDetail(productId);
         return ApiResponse.success(ProductV1Dto.ProductResponse.from(info));
     }
 }

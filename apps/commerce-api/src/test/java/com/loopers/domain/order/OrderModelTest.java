@@ -6,6 +6,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.time.ZonedDateTime;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -84,15 +86,55 @@ class OrderModelTest {
             assertThat(order.calculateTotalPrice()).isZero();
         }
 
-        @DisplayName("confirmTotalPrice 후 totalPrice 가 채워진다.")
+        @DisplayName("confirmAmounts 후 원금/최종금액이 채워지고 할인은 0이다.")
         @Test
-        void confirmsTotalPrice() {
+        void confirmsAmounts() {
             OrderModel order = new OrderModel(1L);
             order.addItem(new OrderItemModel(order, 100L, "신발", 50_000L, 2));
 
-            order.confirmTotalPrice();
+            order.confirmAmounts();
 
-            assertThat(order.getTotalPrice()).isEqualTo(100_000L);
+            assertAll(
+                () -> assertThat(order.getOriginalAmount()).isEqualTo(100_000L),
+                () -> assertThat(order.getDiscountAmount()).isZero(),
+                () -> assertThat(order.getTotalPrice()).isEqualTo(100_000L)
+            );
+        }
+    }
+
+    @DisplayName("쿠폰 할인을 적용할 때,")
+    @Nested
+    class ApplyDiscount {
+
+        @DisplayName("원금에서 할인액을 빼 최종 결제 금액을 확정한다.")
+        @Test
+        void appliesDiscount() {
+            OrderModel order = new OrderModel(1L);
+            order.addItem(new OrderItemModel(order, 100L, "신발", 50_000L, 2));   // 100,000
+            order.confirmAmounts();
+
+            order.applyDiscount(com.loopers.domain.common.Money.of(10_000L));
+
+            assertAll(
+                () -> assertThat(order.getOriginalAmount()).isEqualTo(100_000L),
+                () -> assertThat(order.getDiscountAmount()).isEqualTo(10_000L),
+                () -> assertThat(order.getTotalPrice()).isEqualTo(90_000L)
+            );
+        }
+
+        @DisplayName("할인액이 원금을 초과하면 원금까지만 할인되어 최종 금액은 0이다 (음수 방지).")
+        @Test
+        void capsDiscountAtOriginal() {
+            OrderModel order = new OrderModel(1L);
+            order.addItem(new OrderItemModel(order, 100L, "신발", 5_000L, 1));   // 5,000
+            order.confirmAmounts();
+
+            order.applyDiscount(com.loopers.domain.common.Money.of(10_000L));
+
+            assertAll(
+                () -> assertThat(order.getDiscountAmount()).isEqualTo(5_000L),
+                () -> assertThat(order.getTotalPrice()).isZero()
+            );
         }
     }
 
@@ -100,40 +142,72 @@ class OrderModelTest {
     @Nested
     class StateTransition {
 
-        @DisplayName("PENDING → COMPLETED 로 전이된다.")
+        private final ZonedDateTime now = ZonedDateTime.now();
+
+        @DisplayName("PENDING → PAYMENT_IN_PROGRESS 로 전이되고 점유 시작 시각이 기록된다.")
         @Test
-        void completesFromPending() {
+        void startsPaymentFromPending() {
             OrderModel order = new OrderModel(1L);
+            order.startPayment(now);
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.PAYMENT_IN_PROGRESS);
+            assertThat(order.getPaymentStartedAt()).isEqualTo(now);
+        }
+
+        @DisplayName("PENDING 이 아닌 주문의 결제 시작은 BAD_REQUEST 예외가 발생한다 (중복 confirm 가드).")
+        @Test
+        void throwsBadRequest_whenStartingPaymentTwice() {
+            OrderModel order = new OrderModel(1L);
+            order.startPayment(now);
+
+            CoreException result = assertThrows(CoreException.class, () -> order.startPayment(now));
+            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
+        }
+
+        @DisplayName("PAYMENT_IN_PROGRESS → COMPLETED 로 전이된다.")
+        @Test
+        void completesFromInProgress() {
+            OrderModel order = new OrderModel(1L);
+            order.startPayment(now);
             order.complete();
             assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
         }
 
-        @DisplayName("PENDING → CANCELLED 로 전이된다.")
+        @DisplayName("자원 점유 전(PENDING) 완료 처리는 BAD_REQUEST 예외가 발생한다.")
         @Test
-        void cancelsFromPending() {
+        void throwsBadRequest_whenCompletingBeforeBinding() {
             OrderModel order = new OrderModel(1L);
-            order.cancel();
-            assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-        }
-
-        @DisplayName("이미 COMPLETED 인 주문을 다시 완료 처리하면 BAD_REQUEST 예외가 발생한다.")
-        @Test
-        void throwsBadRequest_whenCompletingNonPending() {
-            OrderModel order = new OrderModel(1L);
-            order.complete();
 
             CoreException result = assertThrows(CoreException.class, order::complete);
             assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
         }
 
-        @DisplayName("이미 CANCELLED 인 주문을 다시 취소 처리하면 BAD_REQUEST 예외가 발생한다.")
+        @DisplayName("PENDING → FAILED 로 전이된다 (견적 만료/점유 실패).")
         @Test
-        void throwsBadRequest_whenCancellingNonPending() {
+        void failsFromPending() {
             OrderModel order = new OrderModel(1L);
-            order.cancel();
+            order.fail();
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.FAILED);
+        }
 
-            CoreException result = assertThrows(CoreException.class, order::cancel);
+        @DisplayName("PAYMENT_IN_PROGRESS → FAILED 로 전이된다 (승인 실패 보상).")
+        @Test
+        void failsFromInProgress() {
+            OrderModel order = new OrderModel(1L);
+            order.startPayment(now);
+            order.fail();
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.FAILED);
+        }
+
+        @DisplayName("이미 COMPLETED 인 주문을 실패 처리하면 BAD_REQUEST 예외가 발생한다.")
+        @Test
+        void throwsBadRequest_whenFailingCompleted() {
+            OrderModel order = new OrderModel(1L);
+            order.startPayment(now);
+            order.complete();
+
+            CoreException result = assertThrows(CoreException.class, order::fail);
             assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
         }
+
     }
 }

@@ -1,6 +1,6 @@
 package com.loopers.interfaces.api.user;
 
-import com.loopers.application.user.UserFacade;
+import com.loopers.application.user.UserApplicationService;
 import com.loopers.application.user.UserInfo;
 import com.loopers.domain.user.UserRegisterCommand;
 import com.loopers.interfaces.api.ApiResponse;
@@ -21,14 +21,14 @@ public class UserV1Controller implements UserV1ApiSpec {
 
     private static final DateTimeFormatter BIRTH_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
 
-    private final UserFacade userFacade;
+    private final UserApplicationService userApplicationService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Override
     public ApiResponse<UserV1Dto.UserResponse> register(@RequestBody UserV1Dto.RegisterRequest request) {
         LocalDate birthDate = parseBirthDate(request.birthDate());
-        UserInfo info = userFacade.register(new UserRegisterCommand(
+        UserInfo info = userApplicationService.register(new UserRegisterCommand(
             request.loginId(), request.password(), request.name(), birthDate, request.email()
         ));
         return ApiResponse.success(UserV1Dto.UserResponse.from(info));
@@ -37,7 +37,7 @@ public class UserV1Controller implements UserV1ApiSpec {
     @GetMapping("/me")
     @Override
     public ApiResponse<UserV1Dto.UserResponse> getMe(@AuthUser AuthUserContext authUser) {
-        UserInfo info = userFacade.getMe(authUser.userId());
+        UserInfo info = userApplicationService.getMe(authUser.userId());
         return ApiResponse.success(UserV1Dto.UserResponse.from(info));
     }
 
@@ -47,7 +47,7 @@ public class UserV1Controller implements UserV1ApiSpec {
         @AuthUser AuthUserContext authUser,
         @RequestBody UserV1Dto.ChangePasswordRequest request
     ) {
-        userFacade.changePassword(authUser.userId(), request.currentPassword(), request.newPassword());
+        userApplicationService.changePassword(authUser.userId(), request.currentPassword(), request.newPassword());
         return ApiResponse.success(null);
     }
 

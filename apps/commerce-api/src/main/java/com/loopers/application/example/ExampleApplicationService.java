@@ -3,11 +3,11 @@ package com.loopers.application.example;
 import com.loopers.domain.example.ExampleModel;
 import com.loopers.domain.example.ExampleService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 @RequiredArgsConstructor
-@Component
-public class ExampleFacade {
+@Service
+public class ExampleApplicationService {
     private final ExampleService exampleService;
 
     public ExampleInfo getExample(Long id) {
