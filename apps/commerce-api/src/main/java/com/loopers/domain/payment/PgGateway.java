@@ -17,9 +17,10 @@ public interface PgGateway {
      * 결제 요청 전송.
      *
      * @return transactionKey — PG 가 발급한 거래 식별자. 콜백으로 최종 결과가 도착할 때 같은 키가 온다.
-     * @throws com.loopers.support.error.CoreException CB open 또는 PG 응답 실패 시
+     * @throws PgRequestRejectedException 트랜잭션 미생성이 확정된 경우 — 500 거부 재시도 소진, 또는 서킷 open(요청 미전송)
+     * @throws PgIndeterminateException 타임아웃·연결오류 등 요청은 나갔으나 트랜잭션 생성 여부가 불확실한 경우
      */
-    String requestPayment(String userId, Long orderId, CardType cardType, String cardNo, Long amount, String callbackUrl) throws Exception;
+    String requestPayment(String userId, Long orderId, CardType cardType, String cardNo, Long amount, String callbackUrl);
 
     /**
      * orderId 로 해당 주문의 트랜잭션 목록 조회.
