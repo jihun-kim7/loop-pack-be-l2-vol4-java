@@ -61,7 +61,7 @@ public class PaymentV1Controller {
      */
     @PostMapping("/callback")
     public ApiResponse<Void> handleCallback(
-        @RequestBody PaymentV1Dto.CallbackRequest request
+        @Valid @RequestBody PaymentV1Dto.CallbackRequest request
     ) {
         log.info("[Callback] 수신 — transactionKey={}, orderId={}, status={}", request.transactionKey(), request.orderId(), request.status());
         paymentApplicationService.handleCallback(

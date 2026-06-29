@@ -1,6 +1,7 @@
 package com.loopers.domain.payment;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>이 패턴은 Vernon 의 "복잡한 트랜잭션엔 Domain Service 허용" 견해를 따른다.
  */
+@Slf4j
 @RequiredArgsConstructor
 @Service
 public class PaymentService {
@@ -44,8 +46,9 @@ public class PaymentService {
      */
     @Transactional
     public void storePendingTransactionKey(Long orderId, String transactionKey) {
-        paymentRepository.findByOrderId(orderId)
-            .ifPresent(p -> p.storePendingTransactionKey(transactionKey));
+        paymentRepository.findByOrderId(orderId).ifPresentOrElse(
+            p -> p.storePendingTransactionKey(transactionKey),
+            () -> log.warn("[Payment] TID 저장 대상 결제 기록 없음 — orderId={}", orderId));
     }
 
     /**
@@ -55,8 +58,9 @@ public class PaymentService {
      */
     @Transactional
     public void markFailedOnRequest(Long orderId, String reason) {
-        paymentRepository.findByOrderId(orderId)
-            .ifPresent(p -> p.markFailed(reason));
+        paymentRepository.findByOrderId(orderId).ifPresentOrElse(
+            p -> p.markFailed(reason),
+            () -> log.warn("[Payment] 실패 처리 대상 결제 기록 없음 — orderId={}, reason={}", orderId, reason));
     }
 
     /**

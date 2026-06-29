@@ -53,12 +53,20 @@ public class PaymentV1Dto {
      * orderId 는 pg-simulator 에서 String 으로 전달된다.
      */
     public record CallbackRequest(
+        @NotBlank(message = "transactionKey는 필수입니다.")
         String transactionKey,
+
+        @NotBlank(message = "orderId는 필수입니다.")
+        @Pattern(regexp = "^\\d+$", message = "orderId는 숫자 문자열이어야 합니다.")
         String orderId,
+
         String cardType,
         String cardNo,
         Long amount,
+
+        @NotBlank(message = "status는 필수입니다.")
         String status,
+
         String reason
     ) {}
 }
