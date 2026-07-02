@@ -19,4 +19,11 @@ public class ViewLogListener {
         log.info("[UserAction] userId={}, action=VIEW, productId={}",
             event.userId(), event.productId());
     }
+
+    /** 목록 페이지 조회 — 페이지 단위 탐색 행동 로그 (상품별 view_count 집계와 무관). */
+    @EventListener
+    public void onProductListViewed(ProductListViewedEvent event) {
+        log.info("[UserAction] action=LIST_VIEW, brandId={}, sort={}, page={}",
+            event.brandId(), event.sort(), event.page());
+    }
 }

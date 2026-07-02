@@ -1,5 +1,6 @@
 package com.loopers.application.product;
 
+import com.loopers.application.activity.ProductListViewedEvent;
 import com.loopers.application.activity.ProductViewedEvent;
 import com.loopers.domain.brand.BrandModel;
 import com.loopers.domain.brand.BrandRepository;
@@ -77,6 +78,8 @@ public class ProductApplicationService {
     @Transactional(readOnly = true)
     public List<ProductInfo> getProducts(Long brandId, String sort, int page, int size) {
         validateSort(sort);
+        // 목록 페이지 조회 행동 로깅 — 요청당 1건(페이지 단위), 캐시 히트/미스와 무관하게 발행
+        eventPublisher.publishEvent(new ProductListViewedEvent(brandId, sort, page));
         Optional<List<ProductInfo>> cached = productCacheStore.getList(brandId, sort, page, size);
         if (cached.isPresent()) {
             return cached.get();
