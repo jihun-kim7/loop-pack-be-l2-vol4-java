@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +51,7 @@ public class PaymentApplicationService {
     private final PaymentService paymentService;
     private final PgGateway pgGateway;
     private final PaymentRepository paymentRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Lazy
     @Autowired
@@ -144,6 +146,8 @@ public class PaymentApplicationService {
         if ("SUCCESS".equals(status)) {
             payment.markSuccess(transactionKey);             // JPA dirty checking → 자동 UPDATE
             orderTransactionService.completePayment(orderId);
+            // 결제 확정 부가작업(데이터 플랫폼 전송 등)은 이벤트로 분리 — 커밋 후 리스너가 비동기 처리
+            eventPublisher.publishEvent(new PaymentCompletedEvent(orderId, transactionKey, payment.getAmount()));
         } else {
             payment.markFailed(reason != null ? reason : "결제 실패");
             orderTransactionService.releaseAndFail(orderId);
