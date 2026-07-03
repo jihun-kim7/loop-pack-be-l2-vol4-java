@@ -35,4 +35,9 @@ public class CouponRepositoryImpl implements CouponRepository {
         coupon.delete();   // soft delete
         couponJpaRepository.save(coupon);
     }
+
+    @Override
+    public int tryIncreaseIssuedCount(Long couponId) {
+        return couponJpaRepository.tryIncreaseIssuedCount(couponId);
+    }
 }

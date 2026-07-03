@@ -30,4 +30,9 @@ public class KafkaTopicConfig {
     public NewTopic viewEventsTopic(@Value("${commerce-events.topics.view}") String name) {
         return TopicBuilder.name(name).partitions(3).replicas(1).build();
     }
+
+    @Bean
+    public NewTopic couponIssueRequestsTopic(@Value("${commerce-events.topics.coupon-issue}") String name) {
+        return TopicBuilder.name(name).partitions(3).replicas(1).build();
+    }
 }

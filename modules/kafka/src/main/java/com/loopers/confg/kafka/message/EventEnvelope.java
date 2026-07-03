@@ -24,8 +24,13 @@ public record EventEnvelope(
 ) {
 
     public static EventEnvelope of(String eventType, Map<String, Object> payload) {
+        return of(UUID.randomUUID().toString(), eventType, payload);
+    }
+
+    /** 호출자가 식별자를 이미 갖고 있을 때(예: 쿠폰 발급 requestId = eventId) 사용. */
+    public static EventEnvelope of(String eventId, String eventType, Map<String, Object> payload) {
         return new EventEnvelope(
-            UUID.randomUUID().toString(),
+            eventId,
             eventType,
             ZonedDateTime.now().toOffsetDateTime().toString(),
             payload

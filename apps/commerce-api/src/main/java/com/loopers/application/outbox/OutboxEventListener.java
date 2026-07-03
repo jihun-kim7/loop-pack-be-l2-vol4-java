@@ -2,6 +2,7 @@ package com.loopers.application.outbox;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.loopers.application.coupon.CouponIssueRequestedEvent;
 import com.loopers.application.like.LikeChangedEvent;
 import com.loopers.application.payment.PaymentCompletedEvent;
 import com.loopers.confg.kafka.message.EventEnvelope;
@@ -48,6 +49,9 @@ public class OutboxEventListener {
     @Value("${commerce-events.topics.order}")
     private String orderTopic;
 
+    @Value("${commerce-events.topics.coupon-issue}")
+    private String couponIssueTopic;
+
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onLikeChanged(LikeChangedEvent event) {
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -84,8 +88,29 @@ public class OutboxEventListener {
         writeOutbox(orderTopic, event.orderId().toString(), "PAYMENT_COMPLETED", payload);
     }
 
+    /**
+     * 선착순 쿠폰 발급 요청 — 접수 행(coupon_issue_requests)과 같은 트랜잭션으로 기록되어
+     * "202 를 받은 요청은 반드시 처리된다"를 보장한다. requestId 를 eventId 로 사용해
+     * 접수증-메시지-처리기록이 하나의 식별자로 이어진다. key=couponId → 같은 쿠폰은 순차 처리(선착순).
+     */
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    public void onCouponIssueRequested(CouponIssueRequestedEvent event) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("requestId", event.requestId());
+        payload.put("userId", event.userId());
+        payload.put("couponId", event.couponId());
+
+        writeOutbox(couponIssueTopic, event.couponId().toString(), "COUPON_ISSUE_REQUESTED", payload, event.requestId());
+    }
+
     private void writeOutbox(String topic, String partitionKey, String eventType, Map<String, Object> payload) {
-        EventEnvelope envelope = EventEnvelope.of(eventType, payload);
+        writeOutbox(topic, partitionKey, eventType, payload, null);
+    }
+
+    private void writeOutbox(String topic, String partitionKey, String eventType, Map<String, Object> payload, String eventId) {
+        EventEnvelope envelope = eventId == null
+            ? EventEnvelope.of(eventType, payload)
+            : EventEnvelope.of(eventId, eventType, payload);
         try {
             String message = objectMapper.writeValueAsString(envelope);
             outboxEventRepository.save(new OutboxEvent(envelope.eventId(), topic, partitionKey, eventType, message));
